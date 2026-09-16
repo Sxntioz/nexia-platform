@@ -1,9 +1,10 @@
+// URL oficial del backend en Render (comprobada y activa)
 const PROD_API_URL = 'https://nexia-backend-jpgx.onrender.com/api'
-const envApiUrl = import.meta.env.VITE_API_URL
-const API_URL = (envApiUrl && envApiUrl.startsWith('http') && !envApiUrl.includes('localhost'))
-  ? envApiUrl
-  : (import.meta.env.PROD ? PROD_API_URL : (envApiUrl || 'http://localhost:8000/api'))
 
+// En producción (Vercel), usar SIEMPRE la URL oficial de Render ignorando cualquier errata de Vercel
+const API_URL = import.meta.env.PROD
+  ? PROD_API_URL
+  : (import.meta.env.VITE_API_URL || 'http://localhost:8000/api')
 
 const TOKEN_KEY = 'nexia_auth_token'
 const USER_KEY = 'nexia_auth_user'
@@ -40,10 +41,30 @@ export async function apiRequest(path, options = {}) {
     ...options.headers,
   }
 
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers,
-  })
+  let response
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers,
+    })
+  } catch (err) {
+    // Si el servidor de Render está despertando del modo reposo o hay intermitencia
+    if (import.meta.env.PROD) {
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 2000))
+        response = await fetch(`${API_URL}${path}`, {
+          ...options,
+          headers,
+        })
+      } catch (retryErr) {
+        throw new Error(
+          'El servidor en la nube se está iniciando (tarda unos 30 segundos si estaba inactivo). Por favor intenta de nuevo en un momento.'
+        )
+      }
+    } else {
+      throw new Error(err.message || 'Error de conexión con el servidor')
+    }
+  }
 
   if (!response.ok) {
     let message = 'No fue posible completar la solicitud'
