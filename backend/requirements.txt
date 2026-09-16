@@ -1,0 +1,8 @@
+fastapi>=0.116,<1
+alembic==1.16.5
+google-genai==1.32.0
+pydantic-settings>=2.10,<3
+python-multipart==0.0.20
+sqlalchemy>=2.0,<3
+psycopg[binary]>=3.2,<4
+uvicorn[standard]>=0.35,<1

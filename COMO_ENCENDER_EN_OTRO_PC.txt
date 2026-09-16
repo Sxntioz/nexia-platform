@@ -1,0 +1,79 @@
+﻿================================================================================
+GUIA PARA EJECUTAR NEXIA EN OTRO COMPUTADOR (GRUPO NEXUS)
+================================================================================
+
+1. PROGRAMAS NECESARIOS EN EL NUEVO COMPUTADOR
+--------------------------------------------------------------------------------
+Antes de iniciar por primera vez, el nuevo computador debe tener instalados dos
+programas gratuitos basicos:
+
+A) PYTHON (Version 3.10 o superior):
+   - Descargar de: https://www.python.org/downloads/
+   - MUY IMPORTANTE: Durante la instalacion, marca la casilla que dice:
+     [X] "Add python.exe to PATH"
+
+B) NODE.JS (Version LTS recomendada):
+   - Descargar de: https://nodejs.org/
+   - Instalar con las opciones por defecto (incluye 'npm').
+
+
+2. PRIMER PASO EN EL NUEVO COMPUTADOR (SOLO LA PRIMERA VEZ)
+--------------------------------------------------------------------------------
+Una vez copiada toda la carpeta NEXIA al nuevo PC:
+
+1. Entra a la carpeta de NEXIA.
+2. Haz DOBLE CLIC en:
+      INSTALAR_DEPENDENCIAS.bat
+
+   Este archivo automaticamente:
+   - Verificara que tengas Python y Node.js.
+   - Creara el entorno virtual de Python (.venv).
+   - Instalara todas las librerias del Backend (FastAPI, Uvicorn, Gemini, etc.).
+   - Instalara los paquetes del Frontend (React, Vite, etc.).
+
+
+3. COMO ENCENDER LA APLICACION SIEMPRE QUE LA USES
+--------------------------------------------------------------------------------
+Despues de la primera instalacion, para prender la pagina en cualquier momento:
+
+-> Solo haz DOBLE CLIC en:
+      INICIAR_TODO.bat
+
+Este archivo abrira dos ventanas (una para el Backend y otra para el Frontend)
+y abrira automaticamente tu navegador web en:
+   http://localhost:5173/
+
+
+4. SI PREFIERES ENCENDERLOS MANUALMENTE POR CONSOLA (TERMINAL O POWERSHELL)
+--------------------------------------------------------------------------------
+Si prefieres usar la consola o terminal:
+
+A) PARA EL BACKEND:
+   1. Abre una terminal en la carpeta 'backend':
+      cd backend
+   2. Activa el entorno virtual:
+      ..\.venv\Scripts\activate
+   3. Inicia el servidor:
+      python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+
+   (El Backend estara activo en http://127.0.0.1:8000)
+
+B) PARA EL FRONTEND:
+   1. Abre otra terminal en la carpeta 'frontend':
+      cd frontend
+   2. Inicia el servidor de desarrollo:
+      npm run dev
+
+   (El Frontend estara activo en http://localhost:5173)
+
+
+5. DATOS Y CREDENCIALES DE ACCESO
+--------------------------------------------------------------------------------
+* Cuenta de Administrador (Panel Directivo y CCTV Matrix Live):
+  - Correo: admin@nexia.edu.co
+  - Contrasena: admin123
+
+* Estudiantes / Acudientes:
+  - Pueden registrarse directamente desde el boton "Iniciar Sesion" > "Registrarse".
+  - O reportar de forma privada / anonima.
+================================================================================
