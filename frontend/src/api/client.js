@@ -1,4 +1,4 @@
-const PROD_API_URL = 'https://nexia-backend-jogx.onrender.com/api'
+const PROD_API_URL = 'https://nexia-backend-jpgx.onrender.com/api'
 const envApiUrl = import.meta.env.VITE_API_URL
 const API_URL = (envApiUrl && envApiUrl.startsWith('http') && !envApiUrl.includes('localhost'))
   ? envApiUrl
