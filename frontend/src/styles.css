@@ -1495,6 +1495,45 @@ tr:hover td { background: var(--bg-surface-elevated); }
   font-size: 0.92rem;
 }
 
+.mobile-admin-block {
+  background: rgba(14, 165, 233, 0.05);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin: 6px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mobile-admin-header-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--accent-cyan);
+  margin-bottom: 2px;
+}
+
+.mobile-admin-sublinks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mobile-admin-link {
+  padding: 9px 12px;
+  font-size: 0.88rem;
+  background: var(--bg-surface);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.admin-mobile-tabs {
+  display: none;
+}
+
 .mobile-user-box {
   margin-top: 8px;
   padding-top: 12px;
@@ -1540,6 +1579,60 @@ tr:hover td { background: var(--bg-surface-elevated); }
   .admin-shell { display: block; }
   .sidebar { display: none; }
   .form-grid { grid-template-columns: 1fr; }
+
+  /* Barra de navegación táctil para celular */
+  .admin-mobile-tabs {
+    display: flex;
+    overflow-x: auto;
+    padding: 8px 12px;
+    gap: 8px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .admin-mobile-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .admin-mobile-tabs button {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 20px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    background: var(--bg-surface-elevated);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+  }
+  .admin-mobile-tabs button:hover {
+    border-color: var(--accent-cyan);
+    color: var(--accent-cyan);
+  }
+  .admin-mobile-tabs button.active {
+    background: rgba(56, 189, 248, 0.15);
+    border-color: var(--accent-cyan);
+    color: #fff;
+    font-weight: 700;
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.25);
+  }
+
+  .admin-top-header {
+    height: auto !important;
+    min-height: 52px !important;
+    padding: 8px 14px !important;
+  }
+  .admin-header-user small {
+    display: none;
+  }
 }
 
 @media(max-width: 640px) {

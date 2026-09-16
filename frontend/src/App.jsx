@@ -421,9 +421,32 @@ function Header({ user, theme, lang = 'es', onToggleTheme, onToggleLang, onLogou
             </button>
 
             {isAdmin && (
-              <button className="button ghost mobile-action-btn" onClick={() => handleNav('admin')}>
-                <Icon name="shield" size={18} /> <span>{t.navAdmin}</span>
-              </button>
+              <div className="mobile-admin-block">
+                <div className="mobile-admin-header-label">
+                  <Icon name="shield" size={14} />
+                  <span>PANEL DE ADMINISTRACIÓN</span>
+                </div>
+                <div className="mobile-admin-sublinks">
+                  <button className="mobile-link mobile-admin-link" onClick={() => handleNav('admin')}>
+                    <Icon name="file" size={17} /> <span>Reportes y Casos</span>
+                  </button>
+                  <button className="mobile-link mobile-admin-link" onClick={() => handleNav('admin_cctv')}>
+                    <Icon name="video" size={17} /> <span>CCTV Matrix Live (Demo)</span>
+                  </button>
+                  <button className="mobile-link mobile-admin-link" onClick={() => handleNav('admin_recordings')}>
+                    <Icon name="film" size={17} /> <span>Depósito Grabaciones</span>
+                  </button>
+                  <button className="mobile-link mobile-admin-link" onClick={() => handleNav('admin_users')}>
+                    <Icon name="users" size={17} /> <span>Usuarios y Roles</span>
+                  </button>
+                  <button className="mobile-link mobile-admin-link" onClick={() => handleNav('admin_appeals')}>
+                    <Icon name="shield" size={17} /> <span>Apelaciones</span>
+                  </button>
+                  <button className="mobile-link mobile-admin-link" onClick={() => handleNav('admin_manual')}>
+                    <Icon name="book" size={17} /> <span>Manual Escolar (PDF)</span>
+                  </button>
+                </div>
+              </div>
             )}
 
             <button className="button primary mobile-action-btn" onClick={handleCreateReport}>
@@ -1970,15 +1993,56 @@ function AdminLayout({ children, active = 'reports', user }) {
       </aside>
 
       <div className={`admin-main ${active === 'cctv' ? 'cctv-main-mode' : ''}`}>
-        <header className="header" style={{ height: '64px', borderBottom: '1px solid var(--border)' }}>
-          <div>
+        <header className="header admin-top-header" style={{ height: '64px', borderBottom: '1px solid var(--border)' }}>
+          <div className="admin-header-user">
             <small style={{ color: 'var(--text-muted)' }}>Sesión de Auditoría Activa</small>
             <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{user.full_name} ({user.email})</div>
           </div>
-          <button className="button ghost small" onClick={() => navigate('home')}>
-            Ver sitio público
+          <button className="button ghost small admin-exit-btn" onClick={() => navigate('home')}>
+            ← Sitio público
           </button>
         </header>
+
+        {/* Barra de pestañas horizontal táctil para celular */}
+        <nav className="admin-mobile-tabs" aria-label="Navegación móvil del panel">
+          <button
+            className={active === 'dashboard' || active === 'reports' ? 'active' : ''}
+            onClick={() => navigate('admin')}
+          >
+            <Icon name="file" size={15} /> <span>Casos</span>
+          </button>
+          <button
+            className={active === 'cctv' ? 'active' : ''}
+            onClick={() => navigate('admin_cctv')}
+          >
+            <Icon name="video" size={15} /> <span>CCTV</span>
+          </button>
+          <button
+            className={active === 'recordings' ? 'active' : ''}
+            onClick={() => navigate('admin_recordings')}
+          >
+            <Icon name="film" size={15} /> <span>Grabaciones</span>
+          </button>
+          <button
+            className={active === 'users' ? 'active' : ''}
+            onClick={() => navigate('admin_users')}
+          >
+            <Icon name="users" size={15} /> <span>Usuarios</span>
+          </button>
+          <button
+            className={active === 'appeals' ? 'active' : ''}
+            onClick={() => navigate('admin_appeals')}
+          >
+            <Icon name="shield" size={15} /> <span>Apelaciones</span>
+          </button>
+          <button
+            className={active === 'manual' ? 'active' : ''}
+            onClick={() => navigate('admin_manual')}
+          >
+            <Icon name="book" size={15} /> <span>Manual</span>
+          </button>
+        </nav>
+
         {children}
       </div>
     </div>
