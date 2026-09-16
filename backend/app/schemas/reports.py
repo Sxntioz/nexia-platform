@@ -178,6 +178,31 @@ class RecordingResponse(BaseModel):
     created_at: datetime
 
 
+class PresignedUploadRequest(BaseModel):
+    camera_id: str
+    original_name: str
+    mime_type: str = "video/mp4"
+    size_bytes: int = Field(gt=0)
+    recording_started_at: datetime
+    duration_seconds: int = Field(ge=1, le=7200)
+
+
+class PresignedUploadResponse(BaseModel):
+    s3_upload: bool
+    upload_url: str | None = None
+    stored_name: str | None = None
+
+
+class CompleteUploadRequest(BaseModel):
+    camera_id: str
+    recording_started_at: datetime
+    duration_seconds: int = Field(ge=1, le=7200)
+    stored_name: str
+    original_name: str
+    mime_type: str = "video/mp4"
+    size_bytes: int = Field(gt=0)
+
+
 class EvidenceResponse(BaseModel):
     id: str
     report_id: str

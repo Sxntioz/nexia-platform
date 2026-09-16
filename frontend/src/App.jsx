@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { API_BASE_URL, apiRequest, clearSession, getStoredUser, setSession } from './api/client.js'
+import { API_BASE_URL, apiRequest, clearSession, getStoredUser, setSession, uploadVideoWithProgress } from './api/client.js'
 import ArchitecturalSchoolMap from './components/ArchitecturalSchoolMap.jsx'
 import { translations } from './i18n.js'
 
@@ -195,6 +195,77 @@ function promptAuth(defaultTab = 'register', nextRoute = null) {
 let setGlobalConvivenciaModal = () => {}
 function openConvivenciaModal() {
   setGlobalConvivenciaModal(true)
+}
+
+function formatBytes(bytes) {
+  if (!bytes || bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`
+}
+
+function formatEta(seconds) {
+  if (seconds === null || seconds === undefined || isNaN(seconds)) return 'Calculando…'
+  if (seconds <= 0) return 'Completado'
+  if (seconds < 60) return `${seconds} seg`
+  const mins = Math.floor(seconds / 60)
+  const secs = seconds % 60
+  return `${mins} min ${secs < 10 ? '0' : ''}${secs} seg`
+}
+
+function UploadProgressCard({ progress }) {
+  if (!progress) return null
+
+  const { stage, percent, loaded, total, speedMBps, etaSeconds, message } = progress
+
+  return (
+    <div className="upload-progress-card">
+      <div className="upload-progress-header">
+        <div className="upload-progress-title">
+          {stage !== 'DONE' && <div className="upload-progress-spinner" />}
+          {stage === 'DONE' && <Icon name="check" size={16} />}
+          <span>{message || 'Transfiriendo video…'}</span>
+        </div>
+        <div className="upload-progress-percentage">{percent}%</div>
+      </div>
+
+      <div className="upload-progress-track">
+        <div
+          className="upload-progress-fill"
+          style={{
+            width: `${percent}%`,
+            background: stage === 'DONE' ? 'var(--accent-emerald, #10b981)' : undefined,
+          }}
+        />
+      </div>
+
+      <div className="upload-progress-meta">
+        <div>
+          {formatBytes(loaded)} de {formatBytes(total)}
+        </div>
+        <div className="upload-progress-stats">
+          {speedMBps > 0 && (
+            <span className="upload-stat-badge" title="Velocidad de subida">
+              ⚡ {speedMBps} MB/s
+            </span>
+          )}
+          {etaSeconds !== null && stage === 'UPLOADING' && (
+            <span className="upload-stat-badge" title="Tiempo estimado restante">
+              ⏱ {formatEta(etaSeconds)} restantes
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="upload-progress-hint">
+        <Icon name="shield" size={13} />
+        <span>
+          Subida directa en alta velocidad a Amazon AWS S3. No cierres esta pestaña mientras se completa la carga.
+        </span>
+      </div>
+    </div>
+  )
 }
 
 function Badge({ status }) {
@@ -2035,6 +2106,7 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
   const [uploadForm, setUploadForm] = useState({ camera_id: '', duration_seconds: '960' })
   const [uploadFile, setUploadFile] = useState(null)
   const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(null)
   const [uploadMsg, setUploadMsg] = useState('')
   const t = translations[lang] || translations.es
 
@@ -2055,10 +2127,9 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
         setSelectedCam(defCam)
         const matchRec = recs.find(r => r.camera_id === defCam.id)
         setSelectedRec(matchRec || null)
-        setUploadForm(f => ({ ...f, camera_id: defCam.id }))
       }
-    } catch (e) {
-      console.error(e)
+    } catch (err) {
+      console.error("Error loading CCTV data", err)
     } finally {
       setBusy(false)
     }
@@ -2084,7 +2155,7 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
 
   const filteredCameras = useMemo(() => {
     if (floorFilter === '1') {
-      return cameras.filter(c => c.identifier.includes('P1') || c.identifier.includes('BICIS') || c.identifier.includes('PREESC') || c.identifier.includes('COOP') || c.identifier.includes('RAMPA') || c.identifier.includes('INFO'))
+      return cameras.filter(c => c.identifier.startsWith('CAM-P1'))
     }
     if (floorFilter === '2') {
       return cameras.filter(c => c.identifier.startsWith('CAM-2'))
@@ -2100,24 +2171,40 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
     if (!uploadFile) return
     setUploading(true)
     setUploadMsg('')
+    setUploadProgress({
+      stage: 'PREPARING',
+      percent: 0,
+      loaded: 0,
+      total: uploadFile.size,
+      speedMBps: 0,
+      etaSeconds: null,
+      message: 'Iniciando transferencia…',
+    })
     try {
-      const fd = new FormData()
-      fd.append('camera_id', uploadForm.camera_id)
-      fd.append('recording_started_at', new Date().toISOString().slice(0, 16))
-      fd.append('duration_seconds', uploadForm.duration_seconds)
-      fd.append('clip', uploadFile)
-
-      const saved = await apiRequest('/admin/recordings', {
-        method: 'POST',
-        body: fd,
+      const saved = await uploadVideoWithProgress({
+        file: uploadFile,
+        prepareUrl: '/admin/recordings/presigned-url',
+        completeUrl: '/admin/recordings/complete-upload',
+        metadata: {
+          camera_id: uploadForm.camera_id,
+          recording_started_at: new Date().toISOString().slice(0, 16),
+          duration_seconds: parseInt(uploadForm.duration_seconds, 10) || 60,
+        },
+        fallbackUrl: '/admin/recordings',
+        onProgress: prog => setUploadProgress(prog),
       })
       await loadData()
-      setSelectedRec(saved)
-      const targetCam = cameras.find(c => c.id === saved.camera_id)
-      if (targetCam) setSelectedCam(targetCam)
-      setUploadModal(false)
-      setUploadFile(null)
-      setUploadMsg(lang === 'es' ? 'Video sincronizado exitosamente.' : 'Video synced successfully.')
+      if (saved) {
+        setSelectedRec(saved)
+        const targetCam = cameras.find(c => c.id === saved.camera_id)
+        if (targetCam) setSelectedCam(targetCam)
+      }
+      setTimeout(() => {
+        setUploadModal(false)
+        setUploadFile(null)
+        setUploadProgress(null)
+        setUploadMsg(lang === 'es' ? 'Video sincronizado exitosamente.' : 'Video synced successfully.')
+      }, 1500)
     } catch (err) {
       setUploadMsg(`Error: ${err.message}`)
     } finally {
@@ -2432,16 +2519,19 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
                     type="file"
                     accept="video/mp4,video/quicktime"
                     onChange={e => setUploadFile(e.target.files[0])}
+                    disabled={uploading}
                     required
                   />
                 </label>
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
-                  <button type="button" className="button ghost" onClick={() => setUploadModal(false)}>
+                <UploadProgressCard progress={uploadProgress} />
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '14px' }}>
+                  <button type="button" className="button ghost" onClick={() => setUploadModal(false)} disabled={uploading}>
                     Cancelar
                   </button>
                   <button type="submit" className="button primary" disabled={uploading || !uploadFile}>
-                    {uploading ? 'Cargando video al servidor…' : 'Vincular y Reproducir'}
+                    {uploading ? 'Transfiriendo video…' : 'Vincular y Reproducir'}
                   </button>
                 </div>
               </form>
@@ -2549,6 +2639,7 @@ function AdminRecordings({ user }) {
   const [cameras, setCameras] = useState([])
   const [busy, setBusy] = useState(true)
   const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(null)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
@@ -2589,21 +2680,35 @@ function AdminRecordings({ user }) {
     setUploading(true)
     setError('')
     setSuccess('')
+    setUploadProgress({
+      stage: 'PREPARING',
+      percent: 0,
+      loaded: 0,
+      total: file.size,
+      speedMBps: 0,
+      etaSeconds: null,
+      message: 'Iniciando transferencia…',
+    })
     try {
-      const fd = new FormData()
-      fd.append('camera_id', form.camera_id)
-      fd.append('recording_started_at', form.recording_started_at)
-      fd.append('duration_seconds', form.duration_seconds)
-      fd.append('clip', file)
-
-      await apiRequest('/admin/recordings', {
-        method: 'POST',
-        body: fd,
+      await uploadVideoWithProgress({
+        file,
+        prepareUrl: '/admin/recordings/presigned-url',
+        completeUrl: '/admin/recordings/complete-upload',
+        metadata: {
+          camera_id: form.camera_id,
+          recording_started_at: form.recording_started_at,
+          duration_seconds: parseInt(form.duration_seconds, 10) || 60,
+        },
+        fallbackUrl: '/admin/recordings',
+        onProgress: prog => setUploadProgress(prog),
       })
-      setSuccess('Grabación subida exitosamente al depósito.')
+      setSuccess('Grabación subida y verificada exitosamente en el depósito.')
       setFile(null)
       const fileInput = document.getElementById('rec-file-input')
       if (fileInput) fileInput.value = ''
+      setTimeout(() => {
+        setUploadProgress(null)
+      }, 3500)
       await load()
     } catch (err) {
       setError(err.message)
@@ -2644,6 +2749,7 @@ function AdminRecordings({ user }) {
                 <select
                   value={form.camera_id}
                   onChange={e => setForm({ ...form, camera_id: e.target.value })}
+                  disabled={uploading}
                   required
                 >
                   <option value="">Selecciona una cámara</option>
@@ -2657,6 +2763,7 @@ function AdminRecordings({ user }) {
                   type="datetime-local"
                   value={form.recording_started_at}
                   onChange={e => setForm({ ...form, recording_started_at: e.target.value })}
+                  disabled={uploading}
                   required
                 />
               </label>
@@ -2670,6 +2777,7 @@ function AdminRecordings({ user }) {
                   value={form.duration_seconds}
                   onChange={e => setForm({ ...form, duration_seconds: e.target.value })}
                   placeholder="Ej: 960 (16 min)"
+                  disabled={uploading}
                   required
                 />
                 <small style={{ color: 'var(--text-muted)' }}>
@@ -2684,12 +2792,15 @@ function AdminRecordings({ user }) {
                   type="file"
                   accept="video/mp4,video/quicktime"
                   onChange={e => setFile(e.target.files[0])}
+                  disabled={uploading}
                   required
                 />
               </label>
 
-              <button className="button primary" disabled={uploading} style={{ marginTop: '8px' }}>
-                {uploading ? 'Subiendo grabación…' : 'Guardar en depósito'}
+              <UploadProgressCard progress={uploadProgress} />
+
+              <button className="button primary" disabled={uploading || !file} style={{ marginTop: '8px' }}>
+                {uploading ? 'Transfiriendo video…' : 'Guardar en depósito'}
               </button>
             </form>
           </section>

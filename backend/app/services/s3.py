@@ -57,6 +57,16 @@ def generate_presigned_url(s3_key: str, expires_in: int = 7200) -> str:
     )
 
 
+def generate_presigned_upload_url(s3_key: str, content_type: str = "video/mp4", expires_in: int = 7200) -> str:
+    """Genera una URL prefirmada temporal para subida directa (PUT) desde el navegador a S3."""
+    client = get_s3_client()
+    return client.generate_presigned_url(
+        "put_object",
+        Params={"Bucket": settings.aws_bucket_name, "Key": s3_key, "ContentType": content_type},
+        ExpiresIn=expires_in,
+    )
+
+
 def object_exists_in_s3(s3_key: str) -> bool:
     """Verifica si un objeto existe en el bucket de S3."""
     if not is_s3_enabled():

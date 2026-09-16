@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.services.s3 import (
     delete_file_from_s3,
     generate_presigned_url,
+    generate_presigned_upload_url,
     is_s3_enabled,
     object_exists_in_s3,
     upload_file_to_s3,
@@ -48,9 +49,12 @@ from app.schemas.reports import (
     CameraResponse,
     ChatRequest,
     ChatResponse,
+    CompleteUploadRequest,
     DecisionRequest,
     EvidenceResponse,
     MessageResponse,
+    PresignedUploadRequest,
+    PresignedUploadResponse,
     PublicReport,
     RecordingResponse,
     RejectRequest,
@@ -348,6 +352,75 @@ def list_recordings(
         }
         for rec in recordings
     ]
+
+
+@api_router.post("/admin/recordings/presigned-url", response_model=PresignedUploadResponse, tags=["admin"])
+def prepare_recording_upload(
+    payload: PresignedUploadRequest,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> PresignedUploadResponse:
+    camera = db.get(Camera, payload.camera_id)
+    if not camera or not camera.is_active:
+        raise HTTPException(status_code=400, detail="La cámara seleccionada no es válida")
+
+    allowed = {"video/mp4": ".mp4", "video/quicktime": ".mov"}
+    mime = payload.mime_type or "video/mp4"
+    if mime not in allowed:
+        if payload.original_name.lower().endswith(".mov"):
+            mime = "video/quicktime"
+        else:
+            mime = "video/mp4"
+
+    max_bytes = settings.max_video_size_mb * 1024 * 1024
+    if payload.size_bytes > max_bytes:
+        raise HTTPException(status_code=413, detail=f"El video supera el límite de {settings.max_video_size_mb} MB")
+
+    if is_s3_enabled():
+        ext = allowed.get(mime, ".mp4")
+        stored_name = f"rec_{uuid4().hex}{ext}"
+        upload_url = generate_presigned_upload_url(stored_name, content_type=mime, expires_in=7200)
+        return PresignedUploadResponse(
+            s3_upload=True,
+            upload_url=upload_url,
+            stored_name=stored_name,
+        )
+
+    return PresignedUploadResponse(s3_upload=False)
+
+
+@api_router.post("/admin/recordings/complete-upload", response_model=RecordingResponse, status_code=201, tags=["admin"])
+def complete_recording_upload(
+    payload: CompleteUploadRequest,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    camera = db.get(Camera, payload.camera_id)
+    if not camera or not camera.is_active:
+        raise HTTPException(status_code=400, detail="La cámara seleccionada no es válida")
+
+    if is_s3_enabled():
+        if not object_exists_in_s3(payload.stored_name):
+            raise HTTPException(status_code=400, detail="El archivo no se encontró en el bucket de Amazon S3")
+
+    recording = CameraRecording(
+        camera_id=camera.id,
+        original_name=Path(payload.original_name).name[:255],
+        stored_name=payload.stored_name,
+        mime_type=payload.mime_type,
+        size_bytes=payload.size_bytes,
+        recording_started_at=payload.recording_started_at,
+        duration_seconds=payload.duration_seconds,
+    )
+    db.add(recording)
+    db.commit()
+    db.refresh(recording)
+
+    return {
+        **{column.name: getattr(recording, column.name) for column in CameraRecording.__table__.columns},
+        "camera_label": camera.label,
+        "camera_location": camera.location,
+    }
 
 
 @api_router.post("/admin/recordings", response_model=RecordingResponse, status_code=201, tags=["admin"])
