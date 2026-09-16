@@ -120,3 +120,22 @@ app.include_router(api_router, prefix="/api")
 settings.upload_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/api/uploads", StaticFiles(directory=str(settings.upload_dir)), name="uploads")
 
+
+@app.get("/", tags=["system"])
+def root_status():
+    return {"message": "NEXIA Backend API Online", "status": "ok", "version": "0.1.0"}
+
+
+@app.get("/health", tags=["system"])
+def root_health():
+    return {"status": "ok"}
+
+
+if __name__ == "__main__":
+    import os
+    import uvicorn
+
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("app.main:app", host="0.0.0.0", port=port)
+
+
