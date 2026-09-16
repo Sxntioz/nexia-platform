@@ -109,11 +109,14 @@ app = FastAPI(title="NEXIA", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.frontend_origin, "http://127.0.0.1:5173", "http://localhost:5173"],
+    allow_origin_regex=r".*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 app.include_router(api_router, prefix="/api")
 
-# Montar directorio de grabaciones y evidencias para streaming directo en navegador
+# Asegurar y montar directorio de grabaciones y evidencias para streaming directo en navegador
+settings.upload_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/api/uploads", StaticFiles(directory=str(settings.upload_dir)), name="uploads")
+

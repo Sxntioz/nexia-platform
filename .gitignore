@@ -13,7 +13,8 @@ coverage/
 *.log
 .DS_Store
 student_project.db
-backend/data/uploads/
+backend/data/uploads/*
+!backend/data/uploads/.gitkeep
 *.mp4
 *.mov
 *.avi
