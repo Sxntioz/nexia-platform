@@ -1,4 +1,9 @@
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api'
+const PROD_API_URL = 'https://nexia-backend-jogx.onrender.com/api'
+const envApiUrl = import.meta.env.VITE_API_URL
+const API_URL = (envApiUrl && envApiUrl.startsWith('http') && !envApiUrl.includes('localhost'))
+  ? envApiUrl
+  : (import.meta.env.PROD ? PROD_API_URL : (envApiUrl || 'http://localhost:8000/api'))
+
 
 const TOKEN_KEY = 'nexia_auth_token'
 const USER_KEY = 'nexia_auth_user'
