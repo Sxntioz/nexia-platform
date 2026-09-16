@@ -57,6 +57,8 @@ def process_analysis(job_id: str) -> None:
         db.commit()
 
         uploaded = None
+        temp_downloaded_from_s3 = False
+        clip_path = None
         stage = "preparando el análisis"
         try:
             if not settings.gemini_api_key:
@@ -64,7 +66,11 @@ def process_analysis(job_id: str) -> None:
             clip = job.evidence
             clip_path = settings.upload_dir / clip.stored_name
             if not Path(clip_path).is_file():
-                raise RuntimeError("Video local missing")
+                from app.services.s3 import is_s3_enabled, download_file_from_s3
+                if is_s3_enabled() and download_file_from_s3(clip.stored_name, clip_path):
+                    temp_downloaded_from_s3 = True
+                else:
+                    raise RuntimeError("Archivo de video no disponible localmente ni en AWS S3")
 
             stage = "conectando con Gemini"
             client = genai.Client(api_key=settings.gemini_api_key)
@@ -175,6 +181,11 @@ claridad de la posible acción reportada. La respuesta es apoyo preliminar y ser
             job.report.status = ReportStatus.ANALYSIS_FAILED
             db.commit()
         finally:
+            if temp_downloaded_from_s3 and clip_path and Path(clip_path).is_file():
+                try:
+                    Path(clip_path).unlink()
+                except Exception:
+                    pass
             if uploaded is not None:
                 try:
                     client.files.delete(name=uploaded.name)

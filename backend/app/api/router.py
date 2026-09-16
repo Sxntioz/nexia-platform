@@ -3,9 +3,17 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session, joinedload
+
+from app.services.s3 import (
+    delete_file_from_s3,
+    generate_presigned_url,
+    is_s3_enabled,
+    object_exists_in_s3,
+    upload_file_to_s3,
+)
 
 from app.core.auth import (
     create_access_token,
@@ -389,6 +397,13 @@ async def upload_recording(
     db.add(recording)
     db.commit()
     db.refresh(recording)
+
+    if is_s3_enabled():
+        try:
+            upload_file_to_s3(dest_path, stored_name, clip.content_type)
+        except Exception as e:
+            print(f"Error subiendo grabación a AWS S3: {e}")
+
     return {
         **{column.name: getattr(recording, column.name) for column in CameraRecording.__table__.columns},
         "camera_label": camera.label,
@@ -405,6 +420,11 @@ def delete_recording(
     rec = db.get(CameraRecording, recording_id)
     if not rec:
         raise HTTPException(status_code=404, detail="Grabación no encontrada")
+    if is_s3_enabled():
+        try:
+            delete_file_from_s3(rec.stored_name)
+        except Exception:
+            pass
     path = settings.upload_dir / rec.stored_name
     if path.is_file():
         try:
@@ -421,9 +441,17 @@ def stream_recording(recording_id: str, db: Session = Depends(get_db)):
     rec = db.get(CameraRecording, recording_id)
     if not rec:
         raise HTTPException(status_code=404, detail="Grabación no encontrada")
+    
+    if is_s3_enabled():
+        try:
+            s3_url = generate_presigned_url(rec.stored_name, expires_in=7200)
+            return RedirectResponse(url=s3_url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+        except Exception as e:
+            print(f"Fallback local para streaming de grabación: {e}")
+
     file_path = settings.upload_dir / rec.stored_name
     if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Archivo de video no encontrado en disco")
+        raise HTTPException(status_code=404, detail="Archivo de video no encontrado en disco ni en Amazon S3")
     return FileResponse(
         path=str(file_path),
         media_type=rec.mime_type or "video/mp4",
@@ -483,6 +511,13 @@ async def upload_evidence(
     db.add(evidence)
     db.commit()
     db.refresh(evidence)
+
+    if is_s3_enabled():
+        try:
+            upload_file_to_s3(dest_path, stored_name, clip.content_type)
+        except Exception as e:
+            print(f"Error subiendo evidencia a AWS S3: {e}")
+
     temporal_match, spatial_match = metadata_matches(report, camera, evidence.recording_started_at, evidence.duration_seconds)
     return {
         **{column.name: getattr(evidence, column.name) for column in EvidenceClip.__table__.columns},
@@ -496,13 +531,21 @@ def stream_evidence(
     evidence_id: str,
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
-) -> FileResponse:
+):
     evidence = db.get(EvidenceClip, evidence_id)
     if not evidence:
         raise HTTPException(status_code=404, detail="Evidencia no encontrada")
+    
+    if is_s3_enabled():
+        try:
+            s3_url = generate_presigned_url(evidence.stored_name, expires_in=7200)
+            return RedirectResponse(url=s3_url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+        except Exception as e:
+            print(f"Fallback local para streaming de evidencia: {e}")
+
     path = settings.upload_dir / evidence.stored_name
     if not path.is_file():
-        raise HTTPException(status_code=404, detail="El clip ya no está disponible localmente")
+        raise HTTPException(status_code=404, detail="El clip no está disponible localmente ni en AWS S3")
     return FileResponse(path, media_type=evidence.mime_type, filename=evidence.original_name)
 
 
@@ -510,13 +553,21 @@ def stream_evidence(
 def stream_evidence_public(
     evidence_id: str,
     db: Session = Depends(get_db),
-) -> FileResponse:
+):
     evidence = db.get(EvidenceClip, evidence_id)
     if not evidence:
         raise HTTPException(status_code=404, detail="Evidencia no encontrada")
+
+    if is_s3_enabled():
+        try:
+            s3_url = generate_presigned_url(evidence.stored_name, expires_in=7200)
+            return RedirectResponse(url=s3_url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+        except Exception as e:
+            print(f"Fallback local para streaming de evidencia: {e}")
+
     path = settings.upload_dir / evidence.stored_name
     if not path.is_file():
-        raise HTTPException(status_code=404, detail="El clip ya no está disponible localmente")
+        raise HTTPException(status_code=404, detail="El clip no está disponible localmente ni en AWS S3")
     return FileResponse(path, media_type=evidence.mime_type, filename=evidence.original_name)
 
 

@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     max_video_size_mb: int = 5120
     upload_dir: Path = PROJECT_ROOT / "backend" / "data" / "uploads"
     secret_key: str = "nexia-secret-key-development-2026"
+    aws_access_key_id: str | None = None
+    aws_secret_access_key: str | None = None
+    aws_bucket_name: str | None = None
+    aws_region: str = "us-east-2"
 
     @field_validator("database_url", mode="before")
     @classmethod
