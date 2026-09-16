@@ -244,121 +244,151 @@ function Header({ user, theme, lang = 'es', onToggleTheme, onToggleLang, onLogou
   }
 
   return (
-    <header className="header">
-      <Logo />
+    <>
+      <header className="header">
+        <Logo />
 
-      {/* Navegación de Escritorio */}
-      <nav className="desktop-nav" aria-label="Navegación principal">
-        <button className="nav-link" onClick={() => handleNav('home')}>{t.navHome}</button>
-        <button className="nav-link" onClick={handleOpenManual}>
-          <Icon name="book" size={16} /> {t.navHandbook}
-        </button>
-        <button className="nav-link" onClick={() => handleNav('track')}>{t.navTrack}</button>
-
-        {isAdmin && (
-          <button className="button ghost small" onClick={() => handleNav('admin')}>
-            {t.navAdmin}
-          </button>
-        )}
-        <button className="button primary small" onClick={handleCreateReport}>
-          {t.navNewReport}
-        </button>
-
-        {/* Idioma Switcher */}
-        <button
-          className="lang-toggle-btn"
-          onClick={onToggleLang}
-          title={lang === 'es' ? 'Switch to English' : 'Cambiar a Español'}
-          aria-label="Cambiar idioma"
-        >
-          🌐 <span>{lang === 'es' ? 'EN' : 'ES'}</span>
-        </button>
-
-        <ThemeToggle theme={theme} onToggle={onToggleTheme} />
-
-        {user ? (
-          <div className="user-profile-menu">
-            <span className="user-pill" title={`${user.email} (${user.role})`}>
-              <span className="user-avatar-badge">{user.full_name?.charAt(0) || 'U'}</span>
-              <div>
-                <b>{user.full_name}</b>
-                <span className="user-role-tag">{user.role === 'ADMIN' ? (lang === 'es' ? 'Directivo' : 'Admin') : user.institution_relation || (lang === 'es' ? 'Usuario' : 'User')}</span>
-              </div>
-            </span>
-            <button className="logout-button" onClick={onLogout} title={t.navSignOut}>
-              {t.navSignOut}
-            </button>
-          </div>
-        ) : (
-          <button className="button secondary small" onClick={() => onOpenAuth('login')}>
-            {t.navSignIn}
-          </button>
-        )}
-      </nav>
-
-      {/* Controles en Móvil (solo visible en pantallas pequeñas) */}
-      <div className="mobile-actions">
-        <button
-          className="lang-toggle-btn"
-          onClick={onToggleLang}
-          title={lang === 'es' ? 'Switch to English' : 'Cambiar a Español'}
-          aria-label="Cambiar idioma"
-        >
-          🌐 {lang === 'es' ? 'EN' : 'ES'}
-        </button>
-        <ThemeToggle theme={theme} onToggle={onToggleTheme} />
-        <button
-          className="mobile-menu-btn"
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          aria-label="Abrir menú"
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            {mobileMenuOpen ? (
-              <path d="M18 6L6 18M6 6l12 12" />
-            ) : (
-              <path d="M3 12h18M3 6h18M3 18h18" />
-            )}
-          </svg>
-        </button>
-      </div>
-
-      {/* Menú Desplegable Móvil */}
-      {mobileMenuOpen && (
-        <div className="mobile-nav-drawer">
+        {/* Navegación de Escritorio */}
+        <nav className="desktop-nav" aria-label="Navegación principal">
           <button className="nav-link" onClick={() => handleNav('home')}>{t.navHome}</button>
           <button className="nav-link" onClick={handleOpenManual}>
-            <Icon name="book" size={16} /> {t.navHandbook} (PDF)
+            <Icon name="book" size={16} /> {t.navHandbook}
           </button>
           <button className="nav-link" onClick={() => handleNav('track')}>{t.navTrack}</button>
 
           {isAdmin && (
-            <button className="button ghost" onClick={() => handleNav('admin')}>
+            <button className="button ghost small" onClick={() => handleNav('admin')}>
               {t.navAdmin}
             </button>
           )}
-
-          <button className="button primary" onClick={handleCreateReport}>
+          <button className="button primary small" onClick={handleCreateReport}>
             {t.navNewReport}
           </button>
 
+          {/* Idioma Switcher */}
+          <button
+            className="lang-toggle-btn"
+            onClick={onToggleLang}
+            title={lang === 'es' ? 'Switch to English' : 'Cambiar a Español'}
+            aria-label="Cambiar idioma"
+          >
+            🌐 <span>{lang === 'es' ? 'EN' : 'ES'}</span>
+          </button>
+
+          <ThemeToggle theme={theme} onToggle={onToggleTheme} />
+
           {user ? (
-            <div style={{ marginTop: '16px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
-              <div style={{ marginBottom: '12px' }}>
-                <strong>{user.full_name}</strong>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{user.email} · {user.role}</div>
-              </div>
-              <button className="button danger-outline" style={{ width: '100%' }} onClick={() => { setMobileMenuOpen(false); onLogout() }}>
+            <div className="user-profile-menu">
+              <span className="user-pill" title={`${user.email} (${user.role})`}>
+                <span className="user-avatar-badge">{user.full_name?.charAt(0) || 'U'}</span>
+                <div>
+                  <b>{user.full_name}</b>
+                  <span className="user-role-tag">{user.role === 'ADMIN' ? (lang === 'es' ? 'Directivo' : 'Admin') : user.institution_relation || (lang === 'es' ? 'Usuario' : 'User')}</span>
+                </div>
+              </span>
+              <button className="logout-button" onClick={onLogout} title={t.navSignOut}>
                 {t.navSignOut}
               </button>
             </div>
           ) : (
-            <button className="button secondary" style={{ marginTop: '16px' }} onClick={() => { setMobileMenuOpen(false); onOpenAuth('login') }}>
+            <button className="button secondary small" onClick={() => onOpenAuth('login')}>
               {t.navSignIn}
             </button>
           )}
+        </nav>
+
+        {/* Controles en Móvil (solo visible en pantallas pequeñas) */}
+        <div className="mobile-actions">
+          <button
+            className="lang-toggle-btn"
+            onClick={onToggleLang}
+            title={lang === 'es' ? 'Switch to English' : 'Cambiar a Español'}
+            aria-label="Cambiar idioma"
+          >
+            🌐 {lang === 'es' ? 'EN' : 'ES'}
+          </button>
+          <ThemeToggle theme={theme} onToggle={onToggleTheme} />
+          <button
+            className="mobile-menu-btn"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label={mobileMenuOpen ? "Cerrar menú" : "Abrir menú"}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              {mobileMenuOpen ? (
+                <path d="M18 6L6 18M6 6l12 12" />
+              ) : (
+                <path d="M3 12h18M3 6h18M3 18h18" />
+              )}
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      {/* Menú Desplegable Móvil fuera del <header> para no quedar atrapado en el backdrop-filter */}
+      {mobileMenuOpen && (
+        <div className="mobile-nav-overlay" onClick={() => setMobileMenuOpen(false)}>
+          <div className="mobile-nav-drawer" onClick={(e) => e.stopPropagation()}>
+            <div className="mobile-drawer-header">
+              <span className="mobile-drawer-title">MENÚ PRINCIPAL</span>
+              <button
+                className="icon-button close-button"
+                onClick={() => setMobileMenuOpen(false)}
+                aria-label="Cerrar menú"
+              >
+                <Icon name="close" size={18} />
+              </button>
+            </div>
+
+            <button className="mobile-link" onClick={() => handleNav('home')}>
+              <Icon name="home" size={18} /> <span>{t.navHome}</span>
+            </button>
+            <button className="mobile-link" onClick={handleOpenManual}>
+              <Icon name="book" size={18} /> <span>{t.navHandbook} (PDF Ley 1620)</span>
+            </button>
+            <button className="mobile-link" onClick={() => handleNav('track')}>
+              <Icon name="search" size={18} /> <span>{t.navTrack}</span>
+            </button>
+
+            {isAdmin && (
+              <button className="button ghost mobile-action-btn" onClick={() => handleNav('admin')}>
+                <Icon name="shield" size={18} /> <span>{t.navAdmin}</span>
+              </button>
+            )}
+
+            <button className="button primary mobile-action-btn" onClick={handleCreateReport}>
+              <Icon name="plus" size={18} /> <span>{t.navNewReport}</span>
+            </button>
+
+            {user ? (
+              <div className="mobile-user-box">
+                <div className="mobile-user-info">
+                  <span className="user-avatar-badge">{user.full_name?.charAt(0) || 'U'}</span>
+                  <div>
+                    <strong>{user.full_name}</strong>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{user.email} · {user.role}</div>
+                  </div>
+                </div>
+                <button
+                  className="button danger-outline"
+                  style={{ width: '100%', minHeight: '40px' }}
+                  onClick={() => { setMobileMenuOpen(false); onLogout() }}
+                >
+                  {t.navSignOut}
+                </button>
+              </div>
+            ) : (
+              <button
+                className="button secondary"
+                style={{ width: '100%', marginTop: '8px', minHeight: '42px' }}
+                onClick={() => { setMobileMenuOpen(false); onOpenAuth('login') }}
+              >
+                {t.navSignIn}
+              </button>
+            )}
+          </div>
         </div>
       )}
-    </header>
+    </>
   )
 }
 
@@ -3154,10 +3184,10 @@ function AdminDetail({ reportId, user }) {
       <main className="admin-content">
         <button className="text-button" onClick={() => navigate('admin')}>← Volver a reportes</button>
         
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '16px 0 24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '14px 0 20px', flexWrap: 'wrap', gap: '12px' }}>
           <div>
             <p className="eyebrow" style={{ color: 'var(--accent-cyan)' }}>DETALLE DEL REPORTE</p>
-            <h1 style={{ margin: '4px 0 8px', fontSize: '2rem', fontFamily: 'monospace' }}>{report.public_code}</h1>
+            <h1 style={{ margin: '4px 0 6px', fontSize: '1.45rem', fontFamily: 'monospace' }}>{report.public_code}</h1>
             <Badge status={report.status} />
           </div>
           <small style={{ color: 'var(--text-muted)' }}>Recibido {new Date(report.created_at).toLocaleString('es-CO')}</small>
@@ -3165,34 +3195,34 @@ function AdminDetail({ reportId, user }) {
 
         {error && <Notice type="danger">{error}</Notice>}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '24px', alignItems: 'start' }}>
+        <div className="report-detail-layout">
           <div>
           <section className="admin-card">
-            <h3>Información del Suceso</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '16px' }}>
+            <h3 style={{ margin: 0, fontSize: '1.05rem' }}>Información del Suceso</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginTop: '14px' }}>
               <div>
-                <small style={{ color: 'var(--text-muted)' }}>Tipo</small>
-                <div><strong>{TYPE_LABELS[report.incident_type] || report.incident_type}</strong></div>
+                <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Tipo</small>
+                <div style={{ fontSize: '0.92rem' }}><strong>{TYPE_LABELS[report.incident_type] || report.incident_type}</strong></div>
               </div>
               <div>
-                <small style={{ color: 'var(--text-muted)' }}>Fecha y Rango Horario</small>
-                <div><strong>{report.incident_date} · {report.approximate_time_start?.slice(0, 5)} - {report.approximate_time_end?.slice(0, 5)}</strong></div>
+                <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Fecha y Rango Horario</small>
+                <div style={{ fontSize: '0.92rem' }}><strong>{report.incident_date} · {report.approximate_time_start?.slice(0, 5)} - {report.approximate_time_end?.slice(0, 5)}</strong></div>
               </div>
               <div>
-                <small style={{ color: 'var(--text-muted)' }}>Ubicación</small>
-                <div><strong>{report.location}</strong></div>
+                <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Ubicación</small>
+                <div style={{ fontSize: '0.92rem' }}><strong>{report.location}</strong></div>
               </div>
               <div>
-                <small style={{ color: 'var(--text-muted)' }}>Reportante</small>
-                <div><strong>{report.reporter_name}</strong></div>
+                <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Reportante</small>
+                <div style={{ fontSize: '0.92rem' }}><strong>{report.reporter_name}</strong></div>
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
-                <small style={{ color: 'var(--text-muted)' }}>Alias involucrados</small>
-                <div>{report.involved_aliases || 'No indicados'}</div>
+                <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Alias involucrados</small>
+                <div style={{ fontSize: '0.9rem' }}>{report.involved_aliases || 'No indicados'}</div>
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
-                <small style={{ color: 'var(--text-muted)' }}>Descripción</small>
-                <div style={{ background: 'var(--bg-surface-elevated)', padding: '14px', borderRadius: 'var(--radius-sm)', marginTop: '4px', fontSize: '0.9rem', lineHeight: 1.5 }}>
+                <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Descripción</small>
+                <div style={{ background: 'var(--bg-surface-elevated)', padding: '12px 14px', borderRadius: 'var(--radius-sm)', marginTop: '4px', fontSize: '0.86rem', lineHeight: 1.5, maxHeight: '160px', overflowY: 'auto' }}>
                   {report.description}
                 </div>
               </div>
