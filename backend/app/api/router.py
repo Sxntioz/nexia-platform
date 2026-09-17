@@ -239,7 +239,22 @@ def approve_report(
     db: Session = Depends(get_db),
 ) -> dict:
     report = get_report_or_404(db, report_id)
-    require_status(report, {ReportStatus.SUBMITTED})
+    require_status(report, {ReportStatus.SUBMITTED, ReportStatus.ANALYSIS_FAILED, ReportStatus.AWAITING_VIDEO})
+
+    # Si ya tiene una evidencia asociada previamente, reutilizarla directamente
+    existing_evidence = db.scalar(
+        select(EvidenceClip).where(EvidenceClip.report_id == report.id).order_by(desc(EvidenceClip.created_at))
+    )
+    if existing_evidence:
+        job = AnalysisJob(report_id=report.id, evidence_id=existing_evidence.id, model=settings.gemini_model)
+        db.add(job)
+        report.status = ReportStatus.ANALYZING
+        report.public_summary = "Grabación de cámara vinculada. Análisis de IA en curso."
+        db.commit()
+        db.refresh(report)
+        db.refresh(job)
+        background.add_task(process_analysis, job.id)
+        return admin_report_dict(report)
 
     # Buscar coincidencia en las grabaciones precargadas
     recordings = db.scalars(select(CameraRecording).options(joinedload(CameraRecording.camera))).all()

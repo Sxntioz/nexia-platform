@@ -3663,7 +3663,27 @@ function AdminDetail({ reportId, user }) {
               <NexiaProcessingLoader report={report} />
             )}
 
-            {analysis && (
+            {report.status === 'ANALYSIS_FAILED' && (
+              <section className="admin-card" style={{ borderColor: 'rgba(239, 68, 68, 0.4)' }}>
+                <div style={{ width: '44px', height: '44px', borderRadius: '10px', background: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)', display: 'grid', placeItems: 'center', marginBottom: '16px' }}>
+                  <Icon name="alert" size={24} />
+                </div>
+                <h3 style={{ color: 'var(--danger)', margin: '0 0 8px' }}>Análisis no completado</h3>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.5, margin: 0 }}>
+                  {analysis?.safe_error || 'Hubo un inconveniente al conectar con el motor de IA. Puedes reintentar el análisis en cualquier momento con el video ya vinculado.'}
+                </p>
+                <div className="actions" style={{ marginTop: '20px' }}>
+                  <button className="button primary" disabled={busy} onClick={() => action('approve')}>
+                    ⚡ Reintentar análisis con IA
+                  </button>
+                  <button className="button danger-outline" disabled={busy} onClick={() => action('reject')}>
+                    Rechazar
+                  </button>
+                </div>
+              </section>
+            )}
+
+            {analysis && analysis.summary && (
               <section className="admin-card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                   <h3>Veredicto de NEXIA</h3>

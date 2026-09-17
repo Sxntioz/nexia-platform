@@ -135,23 +135,38 @@ claridad de la posible acción reportada. La respuesta es apoyo preliminar y ser
                 response_schema=GeminiAnalysis,
                 temperature=0.1,
             )
-            try:
-                response = client.models.generate_content(
-                    model=settings.gemini_model, contents=[uploaded, prompt], config=config
-                )
-            except errors.ServerError as exc:
-                if exc.status_code != 503 or settings.gemini_fallback_model == settings.gemini_model:
-                    raise
-                logger.warning(
-                    "Gemini devolvió 503 para %s; se intenta el respaldo %s.",
-                    settings.gemini_model, settings.gemini_fallback_model,
-                )
-                job.model = settings.gemini_fallback_model
-                response = client.models.generate_content(
-                    model=settings.gemini_fallback_model, contents=[uploaded, prompt], config=config
-                )
+            candidate_models = [settings.gemini_model, "gemini-3.5-flash", "gemini-flash-lite-latest"]
+            unique_models = []
+            for m in candidate_models:
+                if m and m not in unique_models:
+                    unique_models.append(m)
+
+            response = None
+            last_exc = None
+            for model_name in unique_models:
+                try:
+                    logger.info("Solicitando análisis a Gemini con modelo: %s", model_name)
+                    response = client.models.generate_content(
+                        model=model_name, contents=[uploaded, prompt], config=config
+                    )
+                    job.model = model_name
+                    break
+                except (errors.ServerError, errors.APIError) as exc:
+                    logger.warning("Gemini devolvió error para %s: %s; intentando siguiente modelo.", model_name, exc)
+                    last_exc = exc
+                    continue
+
+            if response is None and last_exc:
+                raise last_exc
+
             stage = "validando la respuesta de Gemini"
-            parsed = response.parsed or GeminiAnalysis.model_validate_json(response.text)
+            if response.parsed:
+                parsed = response.parsed
+            else:
+                raw_text = (response.text or "").strip()
+                clean_json = re.sub(r"^```(?:json)?\s*", "", raw_text, flags=re.MULTILINE)
+                clean_json = re.sub(r"\s*```$", "", clean_json, flags=re.MULTILINE)
+                parsed = GeminiAnalysis.model_validate_json(clean_json)
             temporal, spatial = metadata_matches(
                 job.report, clip.camera, clip.recording_started_at, clip.duration_seconds
             )
