@@ -1,8 +1,9 @@
 import json
 import logging
 import re
+import subprocess
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from google import genai
@@ -58,6 +59,7 @@ def process_analysis(job_id: str) -> None:
 
         uploaded = None
         temp_downloaded_from_s3 = False
+        temp_fragment_path = None
         clip_path = None
         stage = "preparando el análisis"
         try:
@@ -65,77 +67,137 @@ def process_analysis(job_id: str) -> None:
                 raise RuntimeError("API key missing")
             clip = job.evidence
             clip_path = settings.upload_dir / clip.stored_name
-            if not Path(clip_path).is_file():
-                from app.services.s3 import is_s3_enabled, download_file_from_s3
-                if is_s3_enabled() and download_file_from_s3(clip.stored_name, clip_path):
-                    temp_downloaded_from_s3 = True
-                else:
-                    raise RuntimeError("Archivo de video no disponible localmente ni en AWS S3")
+            temp_fragment_path = settings.upload_dir / f"fragment_{job.id}.mp4"
+
+            # 1. Calcular exactamente el fragmento indicado en el reporte del usuario
+            rec_start = clip.recording_started_at.replace(tzinfo=None) if hasattr(clip.recording_started_at, 'tzinfo') else clip.recording_started_at
+            
+            if job.report.approximate_time_start and job.report.approximate_time_end:
+                rep_start = datetime.combine(job.report.incident_date, job.report.approximate_time_start)
+                rep_end = datetime.combine(job.report.incident_date, job.report.approximate_time_end)
+                sec_start = int((rep_start - rec_start).total_seconds())
+                sec_end = int((rep_end - rec_start).total_seconds())
+                
+                # Compensar posibles desfases de zona horaria (UTC vs UTC-5)
+                if sec_start > clip.duration_seconds or sec_end < 0:
+                    for offset in [-5, -4, -6, 5]:
+                        adj = rec_start + timedelta(hours=offset)
+                        s = int((rep_start - adj).total_seconds())
+                        e = int((rep_end - adj).total_seconds())
+                        if 0 <= s <= clip.duration_seconds:
+                            sec_start, sec_end = s, e
+                            break
+            else:
+                sec_start = 0
+                sec_end = min(clip.duration_seconds, 120)
+
+            sec_start = max(0, min(clip.duration_seconds, sec_start))
+            sec_end = max(0, min(clip.duration_seconds, sec_end))
+            if sec_end <= sec_start:
+                sec_end = min(clip.duration_seconds, sec_start + 60)
+
+            # Margen de seguridad de 10s antes y después para capturar el contexto completo
+            trim_start = max(0, sec_start - 10)
+            trim_end = min(clip.duration_seconds, sec_end + 10)
+            trim_duration = max(5, trim_end - trim_start)
+
+            # 2. Obtener URL de origen para extracción del fragmento
+            from app.services.s3 import is_s3_enabled, generate_presigned_url, download_file_from_s3
+            video_source = None
+            if is_s3_enabled():
+                video_source = generate_presigned_url(clip.stored_name, expires_in=3600)
+            elif Path(clip_path).is_file():
+                video_source = str(clip_path)
+
+            upload_file_path = None
+            clip_offset = 0
+
+            # 3. Extraer ÚNICAMENTE el fragmento reportado usando ffmpeg
+            stage = "extrayendo el fragmento reportado"
+            try:
+                import imageio_ffmpeg
+                ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+            except Exception:
+                ffmpeg_exe = "ffmpeg"
+
+            if video_source:
+                cmd = [
+                    ffmpeg_exe,
+                    "-ss", str(trim_start),
+                    "-i", video_source,
+                    "-t", str(trim_duration),
+                    "-vf", "scale=640:-2,fps=10",
+                    "-c:v", "libx264",
+                    "-preset", "ultrafast",
+                    "-crf", "30",
+                    "-an",
+                    "-y",
+                    str(temp_fragment_path),
+                ]
+                logger.info("Extrayendo fragmento de video con ffmpeg: seg %s a %s (duración %ss)", trim_start, trim_end, trim_duration)
+                res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=240)
+                if res.returncode == 0 and Path(temp_fragment_path).is_file() and Path(temp_fragment_path).stat().st_size > 1000:
+                    upload_file_path = temp_fragment_path
+                    clip_offset = trim_start
+                    logger.info("Fragmento extraído exitosamente (%s bytes)", Path(temp_fragment_path).stat().st_size)
+
+            # Fallback en caso de que ffmpeg falle
+            if not upload_file_path:
+                if not Path(clip_path).is_file():
+                    if is_s3_enabled() and download_file_from_s3(clip.stored_name, clip_path):
+                        temp_downloaded_from_s3 = True
+                    else:
+                        raise RuntimeError("Archivo de video no disponible localmente ni en AWS S3")
+                upload_file_path = clip_path
+                clip_offset = 0
 
             stage = "conectando con Gemini"
             client = genai.Client(api_key=settings.gemini_api_key)
-            stage = "subiendo el clip a Gemini"
-            uploaded = client.files.upload(file=str(clip_path))
-            deadline = time.monotonic() + 900  # 15 minutos de margen para videos pesados de 1 a 2 GB
-            stage = "esperando el procesamiento del clip en los servidores de Google"
+            stage = "subiendo el fragmento a Gemini"
+            uploaded = client.files.upload(file=str(upload_file_path))
+            deadline = time.monotonic() + 300
+            stage = "esperando el procesamiento del fragmento en los servidores de Google"
             while not getattr(uploaded, "state", None) or getattr(uploaded.state, "name", "") == "PROCESSING":
                 if time.monotonic() >= deadline:
-                    raise TimeoutError("Gemini file processing timeout (el video tardó más de 15 minutos en procesarse en Google)")
-                time.sleep(3)
+                    raise TimeoutError("Gemini file processing timeout (el video tardó más de 5 minutos en procesarse en Google)")
+                time.sleep(2)
                 uploaded = client.files.get(name=uploaded.name)
             if getattr(uploaded.state, "name", "") != "ACTIVE":
                 raise RuntimeError(f"Gemini no pudo procesar el archivo de video. Estado: {getattr(uploaded.state, 'name', 'DESCONOCIDO')}")
 
-            stage = "solicitando el análisis de video"
+            # Limpiar archivo temporal inmediatamente tras subir a Google
+            if temp_fragment_path and Path(temp_fragment_path).is_file():
+                try:
+                    Path(temp_fragment_path).unlink()
+                except Exception:
+                    pass
+
+            stage = "solicitando el análisis de video a Gemini"
             context = observable_context(job.report.description, job.report.involved_aliases)
             
-            time_focus = ""
-            if job.report.approximate_time_start and job.report.approximate_time_end:
-                rec_start = clip.recording_started_at.replace(tzinfo=None) if hasattr(clip.recording_started_at, 'tzinfo') else clip.recording_started_at
-                rep_start = datetime.combine(job.report.incident_date, job.report.approximate_time_start)
-                rep_end = datetime.combine(job.report.incident_date, job.report.approximate_time_end)
-                
-                sec_start = max(0, int((rep_start - rec_start).total_seconds()))
-                sec_end = min(clip.duration_seconds, int((rep_end - rec_start).total_seconds()))
-                
-                if sec_start > clip.duration_seconds or sec_end < 0:
-                    for offset in [-5, -4, -6, 5]:
-                        adj = rec_start + timedelta(hours=offset)
-                        s = max(0, int((rep_start - adj).total_seconds()))
-                        e = min(clip.duration_seconds, int((rep_end - adj).total_seconds()))
-                        if 0 <= s <= clip.duration_seconds:
-                            sec_start, sec_end = s, e
-                            break
+            time_range_str = f"{job.report.approximate_time_start.strftime('%H:%M')} a {job.report.approximate_time_end.strftime('%H:%M')}" if job.report.approximate_time_start and job.report.approximate_time_end else "horario reportado"
+            prompt = f"""Analiza este fragmento de video de una cámara de seguridad escolar autorizada.
+El reporte busca verificar un posible evento de tipo: {job.report.incident_type}.
+Horario del evento reportado: {time_range_str}.
+Ubicación escolar: {job.report.location}.
 
-                time_focus = f"""
-VENTANA DE TIEMPO CLAVE REPORTADA POR EL USUARIO:
-- Rango de hora solicitado: {job.report.approximate_time_start.strftime('%H:%M')} a {job.report.approximate_time_end.strftime('%H:%M')}
-- En este video de {clip.duration_seconds} segundos, ese fragmento se ubica aproximadamente entre el SEGUNDO {sec_start} y el SEGUNDO {sec_end}.
-- ENFÓCATE PRINCIPALMENTE en este fragmento de tiempo específico para buscar los hechos descritos y extraer los momentos relevantes con la mayor precisión posible.
-"""
+Descripción de los hechos aportada por el estudiante:
+"{context}"
 
-            prompt = f"""Analiza este clip de una cámara escolar autorizada.
-El reporte busca un evento del tipo: {job.report.incident_type}.
-{time_focus}
-Revisa el clip completo, prestando especial atención a la ventana de tiempo indicada y a interacciones con objetos,
-bolsos, bicicletas, maletas, peleas, conductas inadecuadas y cambios de posesión o forcejeos.
-Busca una secuencia observable: aproximación, acción, manipulación o retiro de un objeto y alejamiento.
-No des por cierto el reporte: indica con honestidad si no se ve la secuencia completa o si la distancia/ángulo del video impide concluir.
+INSTRUCCIONES CLAVE DE ANÁLISIS:
+1. Observa con atención todo lo que ocurre en este fragmento.
+2. Identifica si hay evidencia observable de la conducta reportada (peleas, agresiones, golpes, lanzamientos de objetos, forcejeos, manipulación indebida de maletas o conductas atípicas).
+3. Si los estudiantes están sentados, en calma, en clase o conversando pacíficamente sin incidentes, indícalo con total objetividad (event_match: "NOT_OBSERVED").
+4. Si se confirma una conducta anómala o coincidente, indica event_match ("CONFIRMED" o "SUSPICIOUS") y detalla lo que se observa objetivamente.
+5. No identifiques personas ni reveles identidades sensibles. Describe únicamente movimientos físicos observables.
+6. En relevant_moments, devuelve los momentos visualmente importantes con los segundos desde el inicio de este fragmento."""
 
-Contexto visual y descripción reportada por el usuario:
-{context}
-
-Describe únicamente acciones observables. No identifiques rostros o personas, no infieras identidad,
-intención, culpabilidad, raza, salud ni atributos sensibles. No llames "hurto" a una persona;
-usa expresiones como "posible retiro de objeto", "forcejeo observable" o "acción no concluyente".
-Devuelve todos los momentos candidatos como segundos desde el inicio del video. La confianza debe calificar exclusivamente la
-claridad de la posible acción reportada. La respuesta es apoyo preliminar y será revisada por una persona administradora."""
             config = types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema=GeminiAnalysis,
                 temperature=0.1,
             )
-            candidate_models = [settings.gemini_model, "gemini-3.5-flash", "gemini-flash-lite-latest"]
+            candidate_models = [settings.gemini_model, settings.gemini_fallback_model, "gemini-flash-lite-latest"]
             unique_models = []
             for m in candidate_models:
                 if m and m not in unique_models:
@@ -167,9 +229,18 @@ claridad de la posible acción reportada. La respuesta es apoyo preliminar y ser
                 clean_json = re.sub(r"^```(?:json)?\s*", "", raw_text, flags=re.MULTILINE)
                 clean_json = re.sub(r"\s*```$", "", clean_json, flags=re.MULTILINE)
                 parsed = GeminiAnalysis.model_validate_json(clean_json)
+
             temporal, spatial = metadata_matches(
                 job.report, clip.camera, clip.recording_started_at, clip.duration_seconds
             )
+
+            # Ajustar timestamps de los momentos para que coincidan con la grabación completa en el reproductor web
+            adjusted_moments = []
+            for item in parsed.relevant_moments:
+                m_dict = item.model_dump()
+                m_dict["timestamp_seconds"] = min(clip.duration_seconds, clip_offset + item.timestamp_seconds)
+                adjusted_moments.append(m_dict)
+
             result = AnalysisResult(
                 job_id=job.id,
                 temporal_match=temporal,
@@ -178,12 +249,13 @@ claridad de la posible acción reportada. La respuesta es apoyo preliminar y ser
                 suggested_type=parsed.suggested_type,
                 summary=parsed.summary,
                 confidence_level=parsed.confidence_level,
-                relevant_moments_json=json.dumps([item.model_dump() for item in parsed.relevant_moments]),
+                relevant_moments_json=json.dumps(adjusted_moments),
             )
             db.add(result)
             job.status = JobStatus.COMPLETED
             job.completed_at = datetime.now(timezone.utc)
             job.report.status = ReportStatus.REVIEW_REQUIRED
+            job.report.public_summary = f"Análisis de IA completado ({parsed.confidence_level}). {parsed.summary[:150]}"
             job.safe_error = None
             db.commit()
         except Exception as exc:
@@ -196,6 +268,11 @@ claridad de la posible acción reportada. La respuesta es apoyo preliminar y ser
             job.report.status = ReportStatus.ANALYSIS_FAILED
             db.commit()
         finally:
+            if temp_fragment_path and Path(temp_fragment_path).is_file():
+                try:
+                    Path(temp_fragment_path).unlink()
+                except Exception:
+                    pass
             if temp_downloaded_from_s3 and clip_path and Path(clip_path).is_file():
                 try:
                     Path(clip_path).unlink()
@@ -206,3 +283,4 @@ claridad de la posible acción reportada. La respuesta es apoyo preliminar y ser
                     client.files.delete(name=uploaded.name)
                 except Exception:
                     pass
+

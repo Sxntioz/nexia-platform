@@ -70,9 +70,17 @@ from app.schemas.reports import (
 )
 from app.services.chatbot import generate_chat_reply
 from app.services.gemini import process_analysis
-from app.services.reports import admin_report_dict, analysis_dict, create_public_code, metadata_matches, public_report_dict
+from app.services.reports import (
+    admin_report_dict,
+    analysis_dict,
+    create_public_code,
+    find_matching_recording,
+    metadata_matches,
+    public_report_dict,
+)
 
 api_router = APIRouter()
+
 
 
 def get_report_or_404(db: Session, report_id: str) -> Report:
@@ -187,6 +195,33 @@ def create_report(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
+    if payload.approximate_time_end <= payload.approximate_time_start:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La hora de fin debe ser posterior a la hora de inicio del incidente.",
+        )
+
+    # Validar que si hay grabaciones en el sistema, haya al menos una que cubra el lapso de tiempo y ubicación
+    recordings_count = db.scalar(select(func.count(CameraRecording.id)))
+    if recordings_count > 0:
+        matching_rec = find_matching_recording(
+            db,
+            payload.location,
+            payload.incident_date,
+            payload.approximate_time_start,
+            payload.approximate_time_end,
+        )
+        if not matching_rec:
+            time_str = f"{payload.approximate_time_start.strftime('%H:%M')} a {payload.approximate_time_end.strftime('%H:%M')}"
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"No hay ninguna grabación de seguridad registrada para '{payload.location}' "
+                    f"en la fecha {payload.incident_date} durante el lapso ({time_str}). "
+                    "Por favor verifica la hora y salón, o solicita al administrador cargar la grabación correspondiente."
+                ),
+            )
+
     data = payload.model_dump()
     data["reporter_name"] = current_user.full_name
     data["user_id"] = current_user.id
@@ -195,6 +230,7 @@ def create_report(
     db.commit()
     db.refresh(report)
     return {"id": report.id, "public_code": report.public_code, "status": report.status, "created_at": report.created_at}
+
 
 
 @api_router.get("/reports/track/{public_code}", response_model=PublicReport, tags=["public"])
@@ -301,7 +337,8 @@ def approve_report(
         background.add_task(process_analysis, job.id)
     else:
         report.status = ReportStatus.AWAITING_VIDEO
-        report.public_summary = "Tu reporte fue aprobado para revisión de evidencia."
+        time_str = f"{report.approximate_time_start.strftime('%H:%M')} a {report.approximate_time_end.strftime('%H:%M')}" if report.approximate_time_start and report.approximate_time_end else "el horario indicado"
+        report.public_summary = f"No se encontró grabación para '{report.location}' en el lapso ({time_str}). Sube la grabación desde el panel de grabaciones para proceder."
         db.commit()
         db.refresh(report)
 

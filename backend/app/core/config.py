@@ -12,8 +12,8 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./student_project.db"
     frontend_origin: str = "http://localhost:5173"
     gemini_api_key: str | None = _FALLBACK_G_KEY
-    gemini_model: str = "gemini-3.6-flash"
-    gemini_fallback_model: str = "gemini-3.5-flash"
+    gemini_model: str = "gemini-3.5-flash"
+    gemini_fallback_model: str = "gemini-3.6-flash"
     max_video_size_mb: int = 5120
     upload_dir: Path = PROJECT_ROOT / "backend" / "data" / "uploads"
     secret_key: str = "nexia-secret-key-development-2026"

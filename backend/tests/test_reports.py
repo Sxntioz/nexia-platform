@@ -5,14 +5,15 @@ from app.services.gemini import observable_context
 
 def report_payload():
     return {
-        "incident_type": "THEFT",
-        "incident_date": str(date.today()),
-        "approximate_time_start": "10:15:00",
-        "approximate_time_end": "10:45:00",
-        "location": "Patio central",
+        "incident_type": "FIGHT",
+        "incident_date": "2026-09-05",
+        "approximate_time_start": "11:37:00",
+        "approximate_time_end": "11:39:00",
+        "location": "Salón 303",
         "involved_aliases": "Persona A",
-        "description": "Una persona retiró una maleta ajena cerca de las escaleras durante el descanso.",
+        "description": "Una discusión cerca de las ventanas al final del salón.",
     }
+
 
 
 def test_create_report_requires_auth(client):
@@ -82,7 +83,7 @@ def test_create_and_track_report_with_authenticated_user(client, auth_headers):
     assert tracked.status_code == 200
     public = tracked.json()
     assert public["status"] == "SUBMITTED"
-    assert public["incident_type"] == "THEFT"
+    assert public["incident_type"] == "FIGHT"
     for private in ("reporter_name", "involved_aliases", "description", "location"):
         assert private not in public
 
@@ -99,6 +100,21 @@ def test_future_date_is_rejected(client, auth_headers):
     assert client.post("/api/reports", json=payload, headers=auth_headers).status_code == 422
 
 
+def test_create_report_fails_without_matching_recording(client, auth_headers):
+    payload = {
+        "incident_type": "FIGHT",
+        "incident_date": "2026-09-05",
+        "approximate_time_start": "16:00:00",
+        "approximate_time_end": "16:30:00",
+        "location": "Salón 101",
+        "involved_aliases": "Persona A",
+        "description": "No hay grabación en este horario.",
+    }
+    res = client.post("/api/reports", json=payload, headers=auth_headers)
+    assert res.status_code == 400
+    assert "No hay ninguna grabación de seguridad" in res.json()["detail"]
+
+
 def test_admin_routes_require_admin_role(client, auth_headers, admin_headers):
     created = client.post("/api/reports", json=report_payload(), headers=auth_headers).json()
     report_id = created["id"]
@@ -110,7 +126,7 @@ def test_admin_routes_require_admin_role(client, auth_headers, admin_headers):
     # Admin recibe 200
     approved = client.post(f"/api/admin/reports/{report_id}/approve", headers=admin_headers)
     assert approved.status_code == 200
-    assert approved.json()["status"] == "AWAITING_VIDEO"
+    assert approved.json()["status"] in {"ANALYZING", "AWAITING_VIDEO"}
 
 
 def test_admin_users_list_and_role_management(client, auth_headers, admin_headers):

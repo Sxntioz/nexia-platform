@@ -1,7 +1,7 @@
 import json
 import secrets
 import string
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -63,17 +63,25 @@ def _clean_str(text: str) -> str:
     return " ".join(normalized.casefold().split())
 
 
-def metadata_matches(report: Report, camera: Camera, recording_started_at: datetime, duration_seconds: int) -> tuple[bool, bool]:
-    report_start = datetime.combine(report.incident_date, report.approximate_time_start)
-    report_end = datetime.combine(report.incident_date, report.approximate_time_end)
+def check_recording_match(
+    location: str,
+    incident_date: date,
+    time_start: time,
+    time_end: time,
+    camera: Camera | None,
+    recording_started_at: datetime,
+    duration_seconds: int,
+) -> tuple[bool, bool]:
+    report_start = datetime.combine(incident_date, time_start)
+    report_end = datetime.combine(incident_date, time_end)
     
     start = recording_started_at.replace(tzinfo=None) if hasattr(recording_started_at, "tzinfo") else recording_started_at
     end = start + timedelta(seconds=duration_seconds)
     
-    # Check if recording overlaps with report window (with 15 min margin)
+    # Chequeo temporal (con 15 min de margen)
     temporal = (start - timedelta(minutes=15)) <= report_end and (end + timedelta(minutes=15)) >= report_start
     
-    # Check with possible UTC offset (e.g. UTC-5 in Colombia) if upload was sent as UTC
+    # Chequeo con diferencias horarias estándar UTC / Colombia (UTC-5)
     if not temporal:
         for offset in [-5, -4, -6, 5]:
             start_adj = start + timedelta(hours=offset)
@@ -82,7 +90,7 @@ def metadata_matches(report: Report, camera: Camera, recording_started_at: datet
                 temporal = True
                 break
 
-    rep_loc = _clean_str(report.location)
+    rep_loc = _clean_str(location)
     cam_loc = _clean_str(camera.location) if camera else ""
     cam_label = _clean_str(camera.label) if camera else ""
     
@@ -92,3 +100,35 @@ def metadata_matches(report: Report, camera: Camera, recording_started_at: datet
         rep_loc == "otra ubicacion" or not rep_loc
     )
     return bool(temporal), bool(spatial)
+
+
+def metadata_matches(report: Report, camera: Camera, recording_started_at: datetime, duration_seconds: int) -> tuple[bool, bool]:
+    return check_recording_match(
+        report.location,
+        report.incident_date,
+        report.approximate_time_start,
+        report.approximate_time_end,
+        camera,
+        recording_started_at,
+        duration_seconds,
+    )
+
+
+def find_matching_recording(
+    db: Session,
+    location: str,
+    incident_date: date,
+    time_start: time,
+    time_end: time,
+):
+    from app.models import CameraRecording
+    from sqlalchemy.orm import joinedload
+    recordings = db.scalars(select(CameraRecording).options(joinedload(CameraRecording.camera))).all()
+    for rec in recordings:
+        temporal, spatial = check_recording_match(
+            location, incident_date, time_start, time_end, rec.camera, rec.recording_started_at, rec.duration_seconds
+        )
+        if temporal and spatial:
+            return rec
+    return None
+
