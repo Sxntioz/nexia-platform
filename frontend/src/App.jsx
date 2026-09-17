@@ -1044,17 +1044,32 @@ function Home({ user, lang = 'es' }) {
             <div style={{ minHeight: '380px', marginTop: '16px' }}>
               <ArchitecturalSchoolMap
                 selectedFloor={mapFloor}
-                selectedLocation={selectedMapRoom}
+                selectedLocation={typeof selectedMapRoom === 'object' ? selectedMapRoom.location : selectedMapRoom}
                 onSelectLocation={(loc) => setSelectedMapRoom(loc)}
                 interactive={true}
               />
             </div>
             {selectedMapRoom && (
-              <div style={{ marginTop: '12px', padding: '10px 14px', background: 'var(--bg-surface)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--accent-cyan)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>
-                  {lang === 'es' ? 'Espacio seleccionado:' : 'Selected space:'} <strong>{selectedMapRoom}</strong>
-                </span>
-                <button className="button primary small" onClick={handleCreateReport}>
+              <div style={{ marginTop: '12px', padding: '12px 14px', background: 'var(--bg-surface-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--accent-cyan)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                <div>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.82rem', display: 'block' }}>
+                    {lang === 'es' ? 'Espacio seleccionado en el plano:' : 'Selected space on blueprint:'}
+                  </span>
+                  <strong style={{ color: 'var(--accent-cyan)', fontSize: '1rem' }}>
+                    {typeof selectedMapRoom === 'object' ? selectedMapRoom.location : selectedMapRoom}
+                  </strong>
+                  {typeof selectedMapRoom === 'object' && selectedMapRoom.floor && (
+                    <small style={{ marginLeft: '8px', color: 'var(--text-muted)' }}>({selectedMapRoom.floor})</small>
+                  )}
+                </div>
+                <button
+                  className="button primary small"
+                  onClick={() => {
+                    const roomName = typeof selectedMapRoom === 'object' ? selectedMapRoom.location : selectedMapRoom
+                    const floorName = typeof selectedMapRoom === 'object' ? selectedMapRoom.floor : ''
+                    navigate('report', { location: roomName, floor: floorName })
+                  }}
+                >
                   {lang === 'es' ? 'Radicar reporte en este salón →' : 'Report in this room →'}
                 </button>
               </div>
@@ -1557,17 +1572,17 @@ function LinkedCameraCoverPreview({ camera, location, lang = 'es' }) {
   )
 }
 
-function ReportForm({ user, lang = 'es' }) {
+function ReportForm({ user, lang = 'es', initialData = null }) {
   const t = translations[lang] || translations.es
   const [form, setForm] = useState({
     incident_type: '',
     incident_date: '',
     approximate_time_start: '',
     approximate_time_end: '',
-    location: '',
+    location: initialData?.location || '',
     description: '',
   })
-  const [selectedFloor, setSelectedFloor] = useState('')
+  const [selectedFloor, setSelectedFloor] = useState(initialData?.floor || '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [created, setCreated] = useState(null)
@@ -1578,6 +1593,15 @@ function ReportForm({ user, lang = 'es' }) {
       .then(cams => { if (Array.isArray(cams)) setCameraCatalog(cams) })
       .catch(() => {})
   }, [])
+
+  useEffect(() => {
+    if (initialData?.location) {
+      setForm(f => ({ ...f, location: initialData.location }))
+    }
+    if (initialData?.floor) {
+      setSelectedFloor(initialData.floor)
+    }
+  }, [initialData])
 
   const linkedCamera = useMemo(() => {
     if (!form.location) return null
@@ -2334,7 +2358,7 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
           </div>
 
           {/* View mode toggle & AI HUD Toggle */}
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
             <button
               className={`cctv-view-btn ${viewMode === 'spotlight' ? 'active' : ''}`}
               onClick={() => setViewMode('spotlight')}
@@ -2713,6 +2737,54 @@ function AdminRecordings({ user }) {
     duration_seconds: '960',
   })
   const [file, setFile] = useState(null)
+  const [editModal, setEditModal] = useState(false)
+  const [editingRec, setEditingRec] = useState(null)
+  const [editForm, setEditForm] = useState({
+    camera_id: '',
+    original_name: '',
+    recording_started_at: '',
+    duration_seconds: '960',
+  })
+  const [editingBusy, setEditingBusy] = useState(false)
+
+  const openEditModal = (rec) => {
+    setEditingRec(rec)
+    const d = new Date(rec.recording_started_at)
+    const pad = n => String(n).padStart(2, '0')
+    const dtLocal = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+    setEditForm({
+      camera_id: rec.camera_id,
+      original_name: rec.original_name || '',
+      recording_started_at: dtLocal,
+      duration_seconds: String(rec.duration_seconds || 60),
+    })
+    setEditModal(true)
+  }
+
+  const handleSaveEdit = async (e) => {
+    e.preventDefault()
+    if (!editingRec) return
+    setEditingBusy(true)
+    try {
+      await apiRequest(`/admin/recordings/${editingRec.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          camera_id: editForm.camera_id,
+          original_name: editForm.original_name,
+          recording_started_at: editForm.recording_started_at ? new Date(editForm.recording_started_at).toISOString() : undefined,
+          duration_seconds: parseInt(editForm.duration_seconds, 10) || undefined,
+        }),
+      })
+      setSuccess('Grabación actualizada exitosamente.')
+      setEditModal(false)
+      setEditingRec(null)
+      await load()
+    } catch (err) {
+      alert(`Error al actualizar grabación: ${err.message}`)
+    } finally {
+      setEditingBusy(false)
+    }
+  }
 
   const load = useCallback(async () => {
     setBusy(true)
@@ -2804,7 +2876,7 @@ function AdminRecordings({ user }) {
         {error && <Notice type="danger">{error}</Notice>}
         {success && <Notice type="info">{success}</Notice>}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '24px', alignItems: 'start' }}>
+        <div className="admin-two-cols-layout">
           <section className="admin-card">
             <h3>Subir nueva grabación</h3>
             <form onSubmit={handleUpload} style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '14px' }}>
@@ -2903,9 +2975,14 @@ function AdminRecordings({ user }) {
                         <td>{Math.floor(r.duration_seconds / 60)}m {r.duration_seconds % 60}s</td>
                         <td>{(r.size_bytes / (1024 * 1024)).toFixed(1)} MB</td>
                         <td>
-                          <button className="button danger-outline small" onClick={() => handleDelete(r.id)}>
-                            Eliminar
-                          </button>
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            <button className="button secondary small" onClick={() => openEditModal(r)}>
+                              Editar
+                            </button>
+                            <button className="button danger-outline small" onClick={() => handleDelete(r.id)}>
+                              Eliminar
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -2915,6 +2992,84 @@ function AdminRecordings({ user }) {
             )}
           </section>
         </div>
+
+        {/* Modal de edición de grabación */}
+        {editModal && editingRec && (
+          <div className="modal-backdrop" onClick={() => !editingBusy && setEditModal(false)}>
+            <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+              <div className="modal-header">
+                <h3>Editar Grabación</h3>
+                <button className="close-button" onClick={() => !editingBusy && setEditModal(false)}>✕</button>
+              </div>
+              <form onSubmit={handleSaveEdit} style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '14px' }}>
+                <label>
+                  Nombre / Etiqueta del video
+                  <input
+                    type="text"
+                    value={editForm.original_name}
+                    onChange={e => setEditForm({ ...editForm, original_name: e.target.value })}
+                    placeholder="Ej: Camara Salon 303.mp4"
+                    disabled={editingBusy}
+                  />
+                </label>
+                <label>
+                  Cámara asignada
+                  <select
+                    value={editForm.camera_id}
+                    onChange={e => setEditForm({ ...editForm, camera_id: e.target.value })}
+                    disabled={editingBusy}
+                    required
+                  >
+                    <option value="">Selecciona una cámara</option>
+                    {renderCameraOptions(cameras)}
+                  </select>
+                </label>
+                <label>
+                  Fecha y hora de inicio de la grabación
+                  <input
+                    type="datetime-local"
+                    value={editForm.recording_started_at}
+                    onChange={e => setEditForm({ ...editForm, recording_started_at: e.target.value })}
+                    disabled={editingBusy}
+                    required
+                  />
+                </label>
+                <label>
+                  Duración (segundos)
+                  <input
+                    type="number"
+                    min="1"
+                    max="7200"
+                    value={editForm.duration_seconds}
+                    onChange={e => setEditForm({ ...editForm, duration_seconds: e.target.value })}
+                    disabled={editingBusy}
+                    required
+                  />
+                  <small style={{ color: 'var(--text-muted)' }}>
+                    {Math.floor(Number(editForm.duration_seconds || 0) / 60)} min {Number(editForm.duration_seconds || 0) % 60} seg
+                  </small>
+                </label>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={() => setEditModal(false)}
+                    disabled={editingBusy}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="button primary"
+                    disabled={editingBusy}
+                  >
+                    {editingBusy ? 'Guardando…' : 'Guardar Cambios'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </main>
     </AdminLayout>
   )
@@ -3632,7 +3787,7 @@ function App() {
           onOpenAuth={(tab) => setAuthModal({ open: true, tab, nextRoute: null })}
         />
       )}
-      {route.page === 'report' && <ReportForm user={currentUser} lang={lang} />}
+      {route.page === 'report' && <ReportForm user={currentUser} lang={lang} initialData={route.payload} />}
       {route.page === 'track' && <TrackCase initialCode={route.payload} lang={lang} />}
       {route.page === 'admin' && <AdminDashboard user={currentUser} />}
       {route.page === 'admin_cctv' && <AdminLiveCCTV user={currentUser} lang={lang} />}

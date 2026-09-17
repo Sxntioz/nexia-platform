@@ -156,3 +156,44 @@ def test_observable_context_hides_known_aliases_and_contact_data():
     assert "Juan" not in context
     assert "300 123 4567" not in context
     assert "maleta azul" in context
+
+
+def test_update_recording(client, admin_headers):
+    cameras = client.get("/api/admin/cameras", headers=admin_headers).json()
+    assert len(cameras) >= 2
+    cam1 = cameras[0]["id"]
+    cam2 = cameras[1]["id"]
+
+    fake_mp4 = b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom"
+    res = client.post(
+        "/api/admin/recordings",
+        data={
+            "camera_id": cam1,
+            "recording_started_at": "2026-09-01T10:00:00",
+            "duration_seconds": "300",
+        },
+        files={"clip": ("test.mp4", fake_mp4, "video/mp4")},
+        headers=admin_headers,
+    )
+    assert res.status_code == 201
+    rec_id = res.json()["id"]
+    assert res.json()["camera_id"] == cam1
+    assert res.json()["duration_seconds"] == 300
+
+    patch_res = client.patch(
+        f"/api/admin/recordings/{rec_id}",
+        json={
+            "camera_id": cam2,
+            "original_name": "Salon 303 Modificado.mp4",
+            "duration_seconds": 600,
+            "recording_started_at": "2026-09-02T15:30:00",
+        },
+        headers=admin_headers,
+    )
+    assert patch_res.status_code == 200
+    updated = patch_res.json()
+    assert updated["camera_id"] == cam2
+    assert updated["original_name"] == "Salon 303 Modificado.mp4"
+    assert updated["duration_seconds"] == 600
+    assert "2026-09-02T15:30:00" in updated["recording_started_at"]
+

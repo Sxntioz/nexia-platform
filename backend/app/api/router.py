@@ -57,6 +57,7 @@ from app.schemas.reports import (
     PresignedUploadResponse,
     PublicReport,
     RecordingResponse,
+    RecordingUpdateRequest,
     RejectRequest,
     ReportCreate,
     ReportCreated,
@@ -481,6 +482,42 @@ async def upload_recording(
         **{column.name: getattr(recording, column.name) for column in CameraRecording.__table__.columns},
         "camera_label": camera.label,
         "camera_location": camera.location,
+    }
+
+
+@api_router.patch("/admin/recordings/{recording_id}", response_model=RecordingResponse, tags=["admin"])
+def update_recording(
+    recording_id: str,
+    payload: RecordingUpdateRequest,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    rec = db.get(CameraRecording, recording_id)
+    if not rec:
+        raise HTTPException(status_code=404, detail="Grabación no encontrada")
+
+    if payload.camera_id is not None:
+        camera = db.get(Camera, payload.camera_id)
+        if not camera or not camera.is_active:
+            raise HTTPException(status_code=400, detail="La cámara seleccionada no es válida")
+        rec.camera_id = payload.camera_id
+
+    if payload.original_name is not None and payload.original_name.strip():
+        rec.original_name = payload.original_name.strip()[:255]
+
+    if payload.recording_started_at is not None:
+        rec.recording_started_at = payload.recording_started_at
+
+    if payload.duration_seconds is not None:
+        rec.duration_seconds = payload.duration_seconds
+
+    db.commit()
+    db.refresh(rec)
+
+    return {
+        **{column.name: getattr(rec, column.name) for column in CameraRecording.__table__.columns},
+        "camera_label": rec.camera.label if rec.camera else None,
+        "camera_location": rec.camera.location if rec.camera else None,
     }
 
 

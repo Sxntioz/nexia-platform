@@ -203,6 +203,13 @@ class CompleteUploadRequest(BaseModel):
     size_bytes: int = Field(gt=0)
 
 
+class RecordingUpdateRequest(BaseModel):
+    camera_id: str | None = None
+    original_name: str | None = None
+    recording_started_at: datetime | None = None
+    duration_seconds: int | None = Field(default=None, ge=1, le=7200)
+
+
 class EvidenceResponse(BaseModel):
     id: str
     report_id: str

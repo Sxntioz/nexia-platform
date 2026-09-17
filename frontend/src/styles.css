@@ -3055,3 +3055,290 @@ tr:hover td { background: var(--bg-surface-elevated); }
   align-items: center;
   gap: 6px;
 }
+
+/* ==========================================================
+   ADMIN RESPONSIVE TWO-COLUMN LAYOUT & TABLES
+   ========================================================== */
+.admin-two-cols-layout {
+  display: grid;
+  grid-template-columns: 380px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+@media (max-width: 960px) {
+  .admin-two-cols-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 100%;
+  }
+
+  .table-wrap table {
+    min-width: 540px;
+  }
+}
+
+/* Tactical CCTV HUD Overlay Elements */
+.cctv-tactical-hud-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.hud-corner {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+}
+.hud-corner.top-left {
+  top: 8px;
+  left: 8px;
+  border-top: 2px solid var(--accent-cyan);
+  border-left: 2px solid var(--accent-cyan);
+}
+.hud-corner.top-right {
+  top: 8px;
+  right: 8px;
+  border-top: 2px solid var(--accent-cyan);
+  border-right: 2px solid var(--accent-cyan);
+}
+.hud-corner.bottom-left {
+  bottom: 8px;
+  left: 8px;
+  border-bottom: 2px solid var(--accent-cyan);
+  border-left: 2px solid var(--accent-cyan);
+}
+.hud-corner.bottom-right {
+  bottom: 8px;
+  right: 8px;
+  border-bottom: 2px solid var(--accent-cyan);
+  border-right: 2px solid var(--accent-cyan);
+}
+
+.hud-laser-sweep {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
+  box-shadow: 0 0 10px var(--accent-cyan);
+  animation: laserScan 4s linear infinite;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+@keyframes laserScan {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(100%); }
+  100% { transform: translateY(0); }
+}
+
+.hud-telemetry-badge {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  background: rgba(6, 9, 17, 0.85);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem;
+  color: var(--accent-cyan);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 20px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.telemetry-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+  flex-shrink: 0;
+  animation: pulse-cyan 1.5s infinite;
+}
+
+.ai-status-ticker {
+  position: absolute;
+  bottom: 8px;
+  left: 10px;
+  right: 10px;
+  max-width: calc(100% - 20px);
+  background: rgba(6, 9, 17, 0.88);
+  border: 1px solid rgba(139, 92, 246, 0.4);
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  color: #c4b5fd;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+/* ==========================================================
+   CCTV COMMAND CENTER MOBILE RESPONSIVE OVERRIDES (<= 960px)
+   ========================================================== */
+@media (max-width: 960px) {
+  .admin-shell.cctv-viewport-shell {
+    height: auto !important;
+    min-height: 100vh !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .admin-main.cctv-main-mode {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .admin-content.cctv-admin-viewport {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 12px 10px 40px !important;
+    display: block !important;
+  }
+
+  .cctv-admin-viewport .cctv-header-banner {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+    padding: 12px !important;
+  }
+
+  .cctv-admin-viewport .cctv-controls-bar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+    padding: 10px !important;
+  }
+
+  .cctv-admin-viewport .cctv-controls-bar > div {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+
+  .cctv-admin-viewport .cctv-pills {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+
+  .cctv-admin-viewport .cctv-spotlight-layout {
+    display: flex !important;
+    flex-direction: column !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    gap: 18px !important;
+  }
+
+  .cctv-admin-viewport .cctv-monitor-wrapper {
+    width: 100% !important;
+    height: auto !important;
+    flex: none !important;
+  }
+
+  .cctv-admin-viewport .cctv-screen-frame {
+    width: 100% !important;
+    height: auto !important;
+    flex: none !important;
+  }
+
+  .cctv-admin-viewport .cctv-video-container {
+    aspect-ratio: 16 / 9 !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 210px !important;
+    flex: none !important;
+  }
+
+  .cctv-admin-viewport .cctv-mosaic-sidebar {
+    width: 100% !important;
+    height: auto !important;
+    max-height: 460px !important;
+    overflow: hidden !important;
+    flex: none !important;
+  }
+
+  .cctv-admin-viewport .cctv-camera-cards-list {
+    max-height: 380px !important;
+  }
+
+  .cctv-admin-viewport .cctv-multigrid {
+    display: flex !important;
+    flex-direction: column !important;
+    height: auto !important;
+    overflow: visible !important;
+    gap: 12px !important;
+  }
+
+  .cctv-admin-viewport .cctv-grid-cell {
+    aspect-ratio: 16 / 9 !important;
+    width: 100% !important;
+    min-height: 200px !important;
+    height: auto !important;
+    flex: none !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .hud-telemetry-badge {
+    font-size: 0.6rem;
+    padding: 2px 6px;
+  }
+  .ai-status-ticker {
+    font-size: 0.58rem;
+    padding: 2px 6px;
+  }
+  .cctv-screen-hud-top, .cctv-screen-hud-bottom {
+    padding: 6px 10px !important;
+    font-size: 0.72rem !important;
+  }
+  .hud-cam-id {
+    font-size: 0.68rem !important;
+  }
+  .hud-res-tag {
+    display: none;
+  }
+  .chatbot-bubble-btn {
+    bottom: 16px;
+    right: 16px;
+    width: 50px;
+    height: 50px;
+  }
+  .chatbot-window {
+    bottom: 74px;
+    right: 12px;
+    left: 12px;
+    width: calc(100vw - 24px);
+    max-height: calc(100vh - 90px);
+  }
+}
+
