@@ -126,16 +126,12 @@ def process_analysis(job_id: str) -> None:
                     "-ss", str(trim_start),
                     "-i", video_source,
                     "-t", str(trim_duration),
-                    "-vf", "scale=640:-2,fps=10",
-                    "-c:v", "libx264",
-                    "-preset", "ultrafast",
-                    "-crf", "30",
-                    "-an",
+                    "-c", "copy",
                     "-y",
                     str(temp_fragment_path),
                 ]
-                logger.info("Extrayendo fragmento de video con ffmpeg: seg %s a %s (duración %ss)", trim_start, trim_end, trim_duration)
-                res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=240)
+                logger.info("Extrayendo fragmento de video con ffmpeg (-c copy): seg %s a %s (duración %ss)", trim_start, trim_end, trim_duration)
+                res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120)
                 if res.returncode == 0 and Path(temp_fragment_path).is_file() and Path(temp_fragment_path).stat().st_size > 1000:
                     upload_file_path = temp_fragment_path
                     clip_offset = trim_start
