@@ -169,17 +169,32 @@ def root_diag():
         prot = subprocess.run([exe, "-protocols"], capture_output=True, text=True, timeout=5)
         diag["supports_https"] = "https" in (prot.stdout or "")
 
+        import shutil
+        sys_ffmpeg = shutil.which("ffmpeg")
+        diag["sys_ffmpeg"] = sys_ffmpeg
+
         from app.services.s3 import is_s3_enabled, generate_presigned_url
         diag["s3_enabled"] = is_s3_enabled()
         if is_s3_enabled():
             url = generate_presigned_url("rec_627d7efa63a5424a88eefe41e43e40f4.mp4", expires_in=60)
             diag["s3_url_len"] = len(url)
-            p = subprocess.run([exe, "-ss", "420", "-i", url, "-t", "5", "-f", "null", "-"], capture_output=True, text=True, timeout=25)
-            diag["s3_probe_code"] = p.returncode
-            diag["s3_probe_err"] = p.stderr[-400:] if p.stderr else ""
+            
+            # Test 1: with system ffmpeg if available
+            tester_exe = sys_ffmpeg if sys_ffmpeg else exe
+            diag["tester_used"] = tester_exe
+
+            # Test 2: Try with http:// instead of https://
+            http_url = url.replace("https://", "http://", 1)
+            p_http = subprocess.run([tester_exe, "-ss", "420", "-i", http_url, "-t", "1", "-f", "null", "-"], capture_output=True, text=True, timeout=15)
+            diag["http_code"] = p_http.returncode
+            if p_http.returncode != 0:
+                diag["http_err"] = (p_http.stderr or "")[-300:]
+            else:
+                diag["http_success"] = True
     except Exception as e:
         diag["diag_error"] = str(e)
     return diag
+
 
 
 
