@@ -114,44 +114,54 @@ def process_analysis(job_id: str) -> None:
 
             # 3. Extraer ÚNICAMENTE el fragmento reportado usando ffmpeg
             stage = "extrayendo el fragmento reportado"
-            try:
-                import imageio_ffmpeg
-                ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
-            except Exception:
-                ffmpeg_exe = "ffmpeg"
+            import shutil
+            ffmpeg_exe = shutil.which("ffmpeg")
+            if not ffmpeg_exe:
+                try:
+                    import imageio_ffmpeg
+                    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+                except Exception:
+                    ffmpeg_exe = "ffmpeg"
 
             if video_source:
-                cmd = [
-                    ffmpeg_exe,
-                    "-skip_frame", "nokey",
-                    "-ss", str(trim_start),
-                    "-i", video_source,
-                    "-t", str(trim_duration),
-                    "-vf", "scale=480:-2",
-                    "-c:v", "libx264",
-                    "-preset", "ultrafast",
-                    "-crf", "30",
-                    "-an",
-                    "-y",
-                    str(temp_fragment_path),
-                ]
-                logger.info("Extrayendo fragmento de video con ffmpeg: seg %s a %s (duración %ss)", trim_start, trim_end, trim_duration)
-                res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120)
-                if res.returncode == 0 and Path(temp_fragment_path).is_file() and Path(temp_fragment_path).stat().st_size > 1000:
-                    upload_file_path = temp_fragment_path
-                    clip_offset = trim_start
-                    logger.info("Fragmento extraído exitosamente (%s bytes)", Path(temp_fragment_path).stat().st_size)
-                else:
-                    err_text = (res.stderr or b"")[-500:].decode("utf-8", errors="replace")
-                    logger.error("FFMPEG error (%s): %s", res.returncode, err_text)
-                    if Path(clip_path).is_file() and Path(clip_path).stat().st_size < 100 * 1024 * 1024:
-                        upload_file_path = clip_path
-                        clip_offset = 0
+                extract_urls = [video_source]
+                if video_source.startswith("https://"):
+                    extract_urls.append(video_source.replace("https://", "http://", 1))
+
+                for src in extract_urls:
+                    cmd = [
+                        ffmpeg_exe,
+                        "-skip_frame", "nokey",
+                        "-ss", str(trim_start),
+                        "-i", src,
+                        "-t", str(trim_duration),
+                        "-vf", "scale=480:-2",
+                        "-c:v", "libx264",
+                        "-preset", "ultrafast",
+                        "-crf", "30",
+                        "-an",
+                        "-y",
+                        str(temp_fragment_path),
+                    ]
+                    logger.info("Extrayendo fragmento de video con ffmpeg: seg %s a %s (duración %ss)", trim_start, trim_end, trim_duration)
+                    res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=120)
+                    if res.returncode == 0 and Path(temp_fragment_path).is_file() and Path(temp_fragment_path).stat().st_size > 1000:
+                        upload_file_path = temp_fragment_path
+                        clip_offset = trim_start
+                        logger.info("Fragmento extraído exitosamente (%s bytes)", Path(temp_fragment_path).stat().st_size)
+                        break
                     else:
-                        raise RuntimeError(f"Error extrayendo fragmento con ffmpeg: {err_text[:150]}")
+                        err_text = (res.stderr or b"")[-500:].decode("utf-8", errors="replace")
+                        logger.warning("FFMPEG intento falló (%s): %s", res.returncode, err_text)
 
             if not upload_file_path:
-                raise RuntimeError("No fue posible obtener el archivo de video para análisis")
+                if Path(clip_path).is_file() and Path(clip_path).stat().st_size < 100 * 1024 * 1024:
+                    upload_file_path = clip_path
+                    clip_offset = 0
+                else:
+                    err_msg = (res.stderr or b"")[-300:].decode("utf-8", errors="replace") if "res" in locals() else "No se pudo generar fragmento"
+                    raise RuntimeError(f"Error extrayendo fragmento con ffmpeg: {err_msg[:150]}")
+
 
 
             stage = "conectando con Gemini"
