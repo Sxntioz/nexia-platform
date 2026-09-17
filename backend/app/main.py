@@ -165,9 +165,22 @@ def root_diag():
         res = subprocess.run([exe, "-version"], capture_output=True, text=True, timeout=5)
         diag["ffmpeg_ok"] = (res.returncode == 0)
         diag["ffmpeg_version"] = res.stdout.split("\n")[0] if res.stdout else "empty"
+
+        prot = subprocess.run([exe, "-protocols"], capture_output=True, text=True, timeout=5)
+        diag["supports_https"] = "https" in (prot.stdout or "")
+
+        from app.services.s3 import is_s3_enabled, generate_presigned_url
+        diag["s3_enabled"] = is_s3_enabled()
+        if is_s3_enabled():
+            url = generate_presigned_url("rec_627d7efa63a5424a88eefe41e43e40f4.mp4", expires_in=60)
+            diag["s3_url_len"] = len(url)
+            p = subprocess.run([exe, "-ss", "420", "-i", url, "-t", "5", "-f", "null", "-"], capture_output=True, text=True, timeout=25)
+            diag["s3_probe_code"] = p.returncode
+            diag["s3_probe_err"] = p.stderr[-400:] if p.stderr else ""
     except Exception as e:
-        diag["ffmpeg_error"] = str(e)
+        diag["diag_error"] = str(e)
     return diag
+
 
 
 
