@@ -147,6 +147,30 @@ def root_health():
     return {"status": "ok"}
 
 
+@app.get("/diag", tags=["system"])
+def root_diag():
+    import subprocess, shutil
+    diag = {}
+    try:
+        disk = shutil.disk_usage("/")
+        diag["disk_free_mb"] = disk.free // (1024 * 1024)
+        diag["disk_total_mb"] = disk.total // (1024 * 1024)
+    except Exception as e:
+        diag["disk_error"] = str(e)
+
+    try:
+        import imageio_ffmpeg
+        exe = imageio_ffmpeg.get_ffmpeg_exe()
+        diag["ffmpeg_exe"] = exe
+        res = subprocess.run([exe, "-version"], capture_output=True, text=True, timeout=5)
+        diag["ffmpeg_ok"] = (res.returncode == 0)
+        diag["ffmpeg_version"] = res.stdout.split("\n")[0] if res.stdout else "empty"
+    except Exception as e:
+        diag["ffmpeg_error"] = str(e)
+    return diag
+
+
+
 if __name__ == "__main__":
     import os
     import uvicorn

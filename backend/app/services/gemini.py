@@ -141,16 +141,18 @@ def process_analysis(job_id: str) -> None:
                     upload_file_path = temp_fragment_path
                     clip_offset = trim_start
                     logger.info("Fragmento extraído exitosamente (%s bytes)", Path(temp_fragment_path).stat().st_size)
-
-            # Fallback en caso de que ffmpeg falle
-            if not upload_file_path:
-                if not Path(clip_path).is_file():
-                    if is_s3_enabled() and download_file_from_s3(clip.stored_name, clip_path):
-                        temp_downloaded_from_s3 = True
+                else:
+                    err_text = (res.stderr or b"")[-500:].decode("utf-8", errors="replace")
+                    logger.error("FFMPEG error (%s): %s", res.returncode, err_text)
+                    if Path(clip_path).is_file() and Path(clip_path).stat().st_size < 100 * 1024 * 1024:
+                        upload_file_path = clip_path
+                        clip_offset = 0
                     else:
-                        raise RuntimeError("Archivo de video no disponible localmente ni en AWS S3")
-                upload_file_path = clip_path
-                clip_offset = 0
+                        raise RuntimeError(f"Error extrayendo fragmento con ffmpeg: {err_text[:150]}")
+
+            if not upload_file_path:
+                raise RuntimeError("No fue posible obtener el archivo de video para análisis")
+
 
             stage = "conectando con Gemini"
             client = genai.Client(api_key=settings.gemini_api_key)
