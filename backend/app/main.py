@@ -10,7 +10,7 @@ from app.api.router import api_router
 from app.core.auth import hash_password
 from app.core.config import settings
 from app.db.session import get_engine, get_session_factory
-from app.models import Base, Camera, CameraRecording, User, UserRole
+from app.models import Base, Camera, CameraRecording, Report, ReportStatus, User, UserRole
 
 
 @asynccontextmanager
@@ -75,31 +75,47 @@ async def lifespan(_: FastAPI):
                 db.add(default_admin)
                 db.commit()
 
-            # Sincronizar grabaciones de demostración existentes para la Matriz CCTV (Demo)
-            demo_recordings = [
-                ("CAM-P1-BICIS", "rec_1f3f6f89874847c6b131804217f2dffc.mp4", "CCTV_Patio_Canchas_P1.mp4", 960),
-                ("CAM-204", "rec_b9b6427497ea4e4a91d83a78fb0cf19e.mp4", "CCTV_Salon_204_P2.mp4", 1120),
-                ("CAM-303", "rec_1993b7b895c04b8a9949abd964545f68.mp4", "CCTV_Salon_303_P3.mp4", 960),
-                ("CAM-304", "83a22f7ab7b24f1ebc54c6882b59e283.mp4", "CCTV_Salon_304_P3.mp4", 420),
-                ("CAM-P1-INFO1", "ce3e52cfd53c49b2abcea571fe1fabc2.mp4", "CCTV_Informatica_1_P1.mp4", 360),
+            # Sincronizar grabaciones existentes de AWS S3 para el depósito
+            s3_recordings = [
+                ("CAM-303", "rec_627d7efa63a5424a88eefe41e43e40f4.mp4", "VID_20260904_121245.mp4", 1535736945, datetime(2026, 9, 5, 11, 30, 0), 600),
+                ("CAM-P1-RAMPA", "rec_8bcd2f9035694109b32f97d516005da9.mp4", "1000155377.mp4", 611471230, datetime(2026, 9, 12, 20, 12, 0), 480),
+                ("CAM-P1-COOP", "rec_dd3c7ccf175641bfb8a1305d2706b841.mp4", "CAMARA.mp4", 141171752, datetime(2026, 9, 12, 15, 20, 0), 600),
             ]
-            for cam_ident, file_name, display_name, dur in demo_recordings:
-                file_path = settings.upload_dir / file_name
-                if file_path.exists():
-                    cam = db.query(Camera).filter(Camera.identifier == cam_ident).first()
-                    if cam:
-                        already = db.query(CameraRecording).filter(CameraRecording.stored_name == file_name).first()
-                        if not already:
-                            db.add(CameraRecording(
-                                camera_id=cam.id,
-                                original_name=display_name,
-                                stored_name=file_name,
-                                mime_type="video/mp4",
-                                size_bytes=file_path.stat().st_size,
-                                recording_started_at=datetime.now(),
-                                duration_seconds=dur,
-                            ))
+            for cam_ident, file_name, display_name, size, started_at, dur in s3_recordings:
+                cam = db.query(Camera).filter(Camera.identifier == cam_ident).first()
+                if cam:
+                    already = db.query(CameraRecording).filter(CameraRecording.stored_name == file_name).first()
+                    if not already:
+                        db.add(CameraRecording(
+                            camera_id=cam.id,
+                            original_name=display_name,
+                            stored_name=file_name,
+                            mime_type="video/mp4",
+                            size_bytes=size,
+                            recording_started_at=started_at,
+                            duration_seconds=dur,
+                        ))
             db.commit()
+
+            # Asegurar reporte estudiantil inicial si no existe ninguno
+            if db.query(Report).count() == 0:
+                admin_user = db.query(User).filter(User.role == UserRole.ADMIN).first()
+                sample_report = Report(
+                    id="84e5e69f-de69-4e33-938e-39f221662cc3",
+                    public_code="NEX-03OZB2NV",
+                    reporter_name="Angel Santiago Ortiz Andrade",
+                    incident_type="FIGHT",
+                    incident_date=datetime(2026, 9, 5).date(),
+                    approximate_time_start=datetime.strptime("11:37:00", "%H:%M:%S").time(),
+                    approximate_time_end=datetime.strptime("11:39:00", "%H:%M:%S").time(),
+                    location="Salón 303",
+                    description="Estaba en la parte de atras del salon y una persona se me acerco y me tiro el cuaderno y nos empezamos a pelear",
+                    status=ReportStatus.SUBMITTED,
+                    public_summary="Reporte registrado. Pendiente de aprobación para revisión de cámaras.",
+                    user_id=admin_user.id if admin_user else None,
+                )
+                db.add(sample_report)
+                db.commit()
     except Exception as e:
         print("Error en inicialización de base de datos:", e)
     yield
