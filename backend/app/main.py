@@ -62,6 +62,12 @@ async def lifespan(_: FastAPI):
                 db.add_all(new_cameras)
                 db.commit()
 
+            # Asegurar cámara de prueba en vivo para celular
+            cam_cel = db.query(Camera).filter(Camera.identifier == "CAM-CEL-1").first()
+            if not cam_cel:
+                db.add(Camera(identifier="CAM-CEL-1", label="CAM Prueba Cel 1", location="CAM Prueba Cel 1"))
+                db.commit()
+
             # Asegurar usuario administrador por defecto
             admin_user = db.query(User).filter(User.role == UserRole.ADMIN).first()
             if not admin_user:

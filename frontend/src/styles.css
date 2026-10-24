@@ -3342,3 +3342,274 @@ tr:hover td { background: var(--bg-surface-elevated); }
   }
 }
 
+
+
+/* =========================================================================
+   TRANSMISIÓN CCTV EN VIVO DESDE SMARTPHONE & WEBRTC
+   ========================================================================= */
+
+.cctv-dot.live-phone {
+  background: #ef4444;
+  box-shadow: 0 0 10px #ef4444, 0 0 20px rgba(239, 68, 68, 0.6);
+  animation: pulse-live-dot 1.2s infinite ease-in-out;
+}
+
+@keyframes pulse-live-dot {
+  0% { transform: scale(0.9); opacity: 0.8; }
+  50% { transform: scale(1.25); opacity: 1; box-shadow: 0 0 15px #ef4444; }
+  100% { transform: scale(0.9); opacity: 0.8; }
+}
+
+.cctv-card-item.is-live-streaming {
+  border-color: rgba(239, 68, 68, 0.8) !important;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(15, 23, 42, 0.6) 100%) !important;
+}
+
+.live-stream-overlay-banner {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(239, 68, 68, 0.6);
+  padding: 6px 14px;
+  border-radius: 999px;
+  backdrop-filter: blur(8px);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+}
+
+.live-stream-overlay-banner .pulse-tag {
+  width: 10px;
+  height: 10px;
+  background: #ef4444;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #ef4444;
+  animation: pulse-live-dot 1s infinite;
+}
+
+/* Broadcaster Mobile App Component */
+.broadcaster-shell {
+  min-height: 100vh;
+  background: #030712;
+  color: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.broadcaster-container {
+  max-width: 580px;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+}
+
+.broadcaster-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.broadcaster-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.broadcaster-viewfinder-card {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  max-height: 520px;
+  background: #000;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.broadcaster-video-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.broadcaster-hud-corners {
+  position: absolute;
+  inset: 16px;
+  pointer-events: none;
+}
+
+.broadcaster-hud-corners::before,
+.broadcaster-hud-corners::after {
+  content: '';
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border-color: rgba(6, 182, 212, 0.8);
+  border-style: solid;
+}
+
+.broadcaster-hud-corners::before {
+  top: 0;
+  left: 0;
+  border-width: 3px 0 0 3px;
+}
+
+.broadcaster-hud-corners::after {
+  bottom: 0;
+  right: 0;
+  border-width: 0 3px 3px 0;
+}
+
+.broadcaster-status-chip {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 10;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  backdrop-filter: blur(8px);
+}
+
+.broadcaster-status-chip.live {
+  background: rgba(239, 68, 68, 0.9);
+  color: #fff;
+}
+
+.broadcaster-status-chip.idle {
+  background: rgba(30, 41, 59, 0.85);
+  color: #94a3b8;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.broadcaster-controls-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.broadcaster-btn-main {
+  width: 100%;
+  padding: 16px;
+  font-size: 1.1rem;
+  font-weight: 800;
+  border-radius: 14px;
+  cursor: pointer;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+}
+
+.broadcaster-btn-main.start {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #fff;
+}
+
+.broadcaster-btn-main.start:hover {
+  filter: brightness(1.1);
+  transform: translateY(-2px);
+}
+
+.broadcaster-btn-main.stop {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #fff;
+  animation: pulse-live-dot 2s infinite ease-in-out;
+}
+
+.broadcaster-telemetry-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 12px;
+  text-align: center;
+}
+
+.broadcaster-telemetry-grid .stat-value {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--accent-cyan);
+  font-family: monospace;
+}
+
+.broadcaster-telemetry-grid .stat-label {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 2px;
+}
+
+.broadcaster-actions-row {
+  display: flex;
+  gap: 8px;
+}
+
+.broadcaster-action-btn {
+  flex: 1;
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #e2e8f0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.broadcaster-action-btn:hover {
+  background: rgba(51, 65, 85, 0.9);
+}
+
+.qr-connect-modal {
+  text-align: center;
+}
+
+.qr-connect-code {
+  background: #fff;
+  padding: 16px;
+  border-radius: 16px;
+  display: inline-block;
+  margin: 16px auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.qr-connect-code img {
+  display: block;
+  width: 180px;
+  height: 180px;
+}

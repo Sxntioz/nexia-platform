@@ -257,3 +257,13 @@ export async function uploadVideoWithProgress({
     xhr.send(fd)
   })
 }
+
+export function getWebSocketUrl(path) {
+  const base = API_BASE_URL.replace(/^http/, 'ws')
+  const cleanBase = base.endsWith('/') ? base.slice(0, -1) : base
+  const cleanPath = path.startsWith('/') ? path : `/${path}`
+  if (cleanBase.endsWith('/api') && cleanPath.startsWith('/api')) {
+    return `${cleanBase.slice(0, -4)}${cleanPath}`
+  }
+  return `${cleanBase}${cleanPath}`
+}

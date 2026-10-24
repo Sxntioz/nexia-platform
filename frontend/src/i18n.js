@@ -87,6 +87,10 @@ export const translations = {
     cctvFloor2: 'Piso 2 (Salones 201-216)',
     cctvFloor3: 'Piso 3 (Salones 301-316)',
     cctvUploadShortcut: 'Subir video a esta cámara',
+    cctvBroadcastMobile: 'Transmitir con Celular (CAM Prueba Cel 1)',
+    cctvMobileLiveTab: '📱 Celular En Vivo',
+    cctvConnectPhone: 'Conectar Celular En Vivo',
+    cctvConnectPhoneSubtitle: 'Convierte cualquier smartphone en una cámara CCTV escolar en tiempo real conectada a NEXIA.',
     cctvNoVideoWarning: 'Cámara en espera de grabación. Mostrando señal CCTV simulada con telemetría en tiempo real.',
     cctvStoredRecordingsTitle: 'Grabaciones Disponibles para Reproducción',
 
@@ -238,6 +242,10 @@ export const translations = {
     cctvFloor2: 'Floor 2 (Rooms 201-216)',
     cctvFloor3: 'Floor 3 (Rooms 301-316)',
     cctvUploadShortcut: 'Upload video to this camera',
+    cctvBroadcastMobile: 'Broadcast from Phone (CAM Trial Phone 1)',
+    cctvMobileLiveTab: '📱 Live Phone',
+    cctvConnectPhone: 'Connect Live Smartphone',
+    cctvConnectPhoneSubtitle: 'Turn any smartphone into a real-time school CCTV camera connected to NEXIA.',
     cctvNoVideoWarning: 'Camera awaiting footage upload. Displaying simulated CCTV signal with real-time HUD telemetry.',
     cctvStoredRecordingsTitle: 'Footage Available for Playback',
 

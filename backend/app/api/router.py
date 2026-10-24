@@ -2,7 +2,7 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session, joinedload
@@ -1147,4 +1147,247 @@ def upload_manual_pdf(
         "filename": file.filename,
         "size_kb": round(len(content) / 1024, 1),
     }
+
+
+# --- TRANSMISIÓN EN VIVO CCTV DESDE CELULAR / WEBRTC & CHUNKS ---
+
+class LiveBroadcastSession:
+    def __init__(self, session_id: str, camera_id: str, recording_id: str, stored_name: str, camera_identifier: str, camera_label: str):
+        self.session_id = session_id
+        self.camera_id = camera_id
+        self.recording_id = recording_id
+        self.stored_name = stored_name
+        self.camera_identifier = camera_identifier
+        self.camera_label = camera_label
+        self.started_at = datetime.now()
+        self.last_chunk_at = datetime.now()
+        self.total_bytes = 0
+        self.chunks_count = 0
+        self.is_active = True
+
+_active_broadcasts: dict[str, LiveBroadcastSession] = {}
+_camera_active_session: dict[str, str] = {}
+
+
+class WebRTCSignalingManager:
+    def __init__(self):
+        self.rooms: dict[str, list[WebSocket]] = {}
+
+    async def connect(self, room_id: str, websocket: WebSocket):
+        await websocket.accept()
+        if room_id not in self.rooms:
+            self.rooms[room_id] = []
+        self.rooms[room_id].append(websocket)
+
+    def disconnect(self, room_id: str, websocket: WebSocket):
+        if room_id in self.rooms:
+            if websocket in self.rooms[room_id]:
+                self.rooms[room_id].remove(websocket)
+            if not self.rooms[room_id]:
+                del self.rooms[room_id]
+
+    async def broadcast(self, room_id: str, sender: WebSocket, message: dict):
+        if room_id in self.rooms:
+            for connection in self.rooms[room_id]:
+                if connection != sender:
+                    try:
+                        await connection.send_json(message)
+                    except Exception:
+                        pass
+
+webrtc_manager = WebRTCSignalingManager()
+
+
+@api_router.get("/cctv/live-status", tags=["cctv-live"])
+def get_live_status():
+    now = datetime.now()
+    stale = [s_id for s_id, s in _active_broadcasts.items() if (now - s.last_chunk_at).total_seconds() > 45]
+    for s_id in stale:
+        s = _active_broadcasts.pop(s_id, None)
+        if s and s.camera_id in _camera_active_session:
+            del _camera_active_session[s.camera_id]
+
+    result = {}
+    for s in _active_broadcasts.values():
+        result[s.camera_id] = {
+            "session_id": s.session_id,
+            "camera_id": s.camera_id,
+            "camera_identifier": s.camera_identifier,
+            "camera_label": s.camera_label,
+            "recording_id": s.recording_id,
+            "started_at": s.started_at.isoformat(),
+            "duration_seconds": int((now - s.started_at).total_seconds()),
+            "total_bytes": s.total_bytes,
+            "stream_url": f"/api/cctv/live-feed/{s.camera_id}",
+        }
+    return result
+
+
+@api_router.post("/cctv/broadcast/start", tags=["cctv-live"])
+def start_broadcast(
+    payload: dict | None = None,
+    db: Session = Depends(get_db),
+):
+    camera_id = payload.get("camera_id") if payload else None
+    camera = db.get(Camera, camera_id) if camera_id else None
+    if not camera:
+        camera = db.scalar(select(Camera).where(Camera.identifier == "CAM-CEL-1"))
+        if not camera:
+            camera = Camera(identifier="CAM-CEL-1", label="CAM Prueba Cel 1", location="CAM Prueba Cel 1")
+            db.add(camera)
+            db.commit()
+            db.refresh(camera)
+
+    existing_s_id = _camera_active_session.get(camera.id)
+    if existing_s_id and existing_s_id in _active_broadcasts:
+        s = _active_broadcasts[existing_s_id]
+        return {
+            "session_id": s.session_id,
+            "recording_id": s.recording_id,
+            "camera_id": camera.id,
+            "camera_identifier": camera.identifier,
+            "camera_label": camera.label,
+            "is_resumed": True,
+        }
+
+    session_id = str(uuid4())
+    stored_name = f"live_{camera.identifier}_{uuid4().hex[:8]}.webm"
+    now = datetime.now()
+
+    rec = CameraRecording(
+        camera_id=camera.id,
+        original_name=f"En Vivo - {camera.label} ({now.strftime('%H:%M:%S')}).webm",
+        stored_name=stored_name,
+        mime_type="video/webm",
+        size_bytes=0,
+        recording_started_at=now,
+        duration_seconds=1,
+    )
+    db.add(rec)
+    db.commit()
+    db.refresh(rec)
+
+    session = LiveBroadcastSession(
+        session_id=session_id,
+        camera_id=camera.id,
+        recording_id=rec.id,
+        stored_name=stored_name,
+        camera_identifier=camera.identifier,
+        camera_label=camera.label,
+    )
+    _active_broadcasts[session_id] = session
+    _camera_active_session[camera.id] = session_id
+
+    return {
+        "session_id": session_id,
+        "recording_id": rec.id,
+        "camera_id": camera.id,
+        "camera_identifier": camera.identifier,
+        "camera_label": camera.label,
+        "is_resumed": False,
+    }
+
+
+@api_router.post("/cctv/broadcast/chunk", tags=["cctv-live"])
+async def upload_broadcast_chunk(
+    session_id: str = Query(...),
+    chunk: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    session = _active_broadcasts.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Sesión de transmisión no encontrada o expirada")
+
+    content = await chunk.read()
+    chunk_len = len(content)
+    if chunk_len == 0:
+        return {"status": "empty_chunk"}
+
+    dest_path = settings.upload_dir / session.stored_name
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(dest_path, "ab") as f:
+        f.write(content)
+
+    session.total_bytes += chunk_len
+    session.chunks_count += 1
+    session.last_chunk_at = datetime.now()
+    elapsed = max(1, int((session.last_chunk_at - session.started_at).total_seconds()))
+
+    rec = db.get(CameraRecording, session.recording_id)
+    if rec:
+        rec.size_bytes = session.total_bytes
+        rec.duration_seconds = elapsed
+        db.commit()
+
+    return {
+        "status": "ok",
+        "chunks_count": session.chunks_count,
+        "total_bytes": session.total_bytes,
+        "duration_seconds": elapsed,
+    }
+
+
+@api_router.post("/cctv/broadcast/stop", tags=["cctv-live"])
+def stop_broadcast(
+    payload: dict,
+    background: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    session_id = payload.get("session_id")
+    session = _active_broadcasts.pop(session_id, None)
+    if not session:
+        return {"status": "already_stopped"}
+    if session.camera_id in _camera_active_session:
+        del _camera_active_session[session.camera_id]
+
+    rec = db.get(CameraRecording, session.recording_id)
+    if rec:
+        elapsed = max(1, int((datetime.now() - session.started_at).total_seconds()))
+        rec.duration_seconds = elapsed
+        rec.size_bytes = session.total_bytes
+        db.commit()
+        local_path = settings.upload_dir / session.stored_name
+        if is_s3_enabled() and local_path.is_file():
+            background.add_task(upload_file_to_s3, local_path, session.stored_name, "video/webm")
+
+    return {
+        "status": "stopped",
+        "session_id": session_id,
+        "recording_id": session.recording_id,
+        "duration_seconds": rec.duration_seconds if rec else 0,
+    }
+
+
+@api_router.get("/cctv/live-feed/{camera_id}", tags=["cctv-live"])
+def get_live_feed(camera_id: str, db: Session = Depends(get_db)):
+    session_id = _camera_active_session.get(camera_id)
+    if not session_id or session_id not in _active_broadcasts:
+        rec = db.scalar(
+            select(CameraRecording)
+            .where(CameraRecording.camera_id == camera_id)
+            .order_by(desc(CameraRecording.created_at))
+        )
+        if rec:
+            return RedirectResponse(f"/api/recordings/{rec.id}/stream")
+        raise HTTPException(status_code=404, detail="La cámara no está transmitiendo en vivo actualmente")
+
+    session = _active_broadcasts[session_id]
+    local_path = settings.upload_dir / session.stored_name
+    if not local_path.is_file() or local_path.stat().st_size == 0:
+        raise HTTPException(status_code=503, detail="Esperando primeros cuadros de video...")
+    return FileResponse(path=str(local_path), media_type="video/webm", filename=session.stored_name)
+
+
+@api_router.websocket("/cctv/ws/{camera_id}")
+async def webrtc_signaling_endpoint(websocket: WebSocket, camera_id: str):
+    await webrtc_manager.connect(camera_id, websocket)
+    try:
+        while True:
+            data = await websocket.receive_json()
+            await webrtc_manager.broadcast(camera_id, websocket, data)
+    except WebSocketDisconnect:
+        webrtc_manager.disconnect(camera_id, websocket)
+    except Exception:
+        webrtc_manager.disconnect(camera_id, websocket)
+
 
