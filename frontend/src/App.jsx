@@ -428,6 +428,13 @@ function Header({ user, theme, lang = 'es', onToggleTheme, onToggleLang, onLogou
             <button className="mobile-link" onClick={() => handleNav('track')}>
               <Icon name="search" size={18} /> <span>{t.navTrack}</span>
             </button>
+            <button
+              className="mobile-link"
+              style={{ background: 'rgba(56, 189, 248, 0.15)', border: '1px solid rgba(56, 189, 248, 0.4)', color: '#38bdf8', fontWeight: 700 }}
+              onClick={() => handleNav('cctv_broadcast')}
+            >
+              <Icon name="camera" size={18} /> <span>📱 Transmitir con Celular (CCTV)</span>
+            </button>
 
             {isAdmin && (
               <div className="mobile-admin-block">
@@ -441,6 +448,13 @@ function Header({ user, theme, lang = 'es', onToggleTheme, onToggleLang, onLogou
                   </button>
                   <button className="mobile-link mobile-admin-link" onClick={() => handleNav('admin_cctv')}>
                     <Icon name="video" size={17} /> <span>CCTV Matrix Live (Demo)</span>
+                  </button>
+                  <button
+                    className="mobile-link mobile-admin-link"
+                    style={{ background: 'rgba(56, 189, 248, 0.12)', color: '#38bdf8', fontWeight: 600 }}
+                    onClick={() => handleNav('cctv_broadcast')}
+                  >
+                    <Icon name="camera" size={17} /> <span>📱 Transmitir Celular (CAM Prueba Cel 1)</span>
                   </button>
                   <button className="mobile-link mobile-admin-link" onClick={() => handleNav('admin_recordings')}>
                     <Icon name="film" size={17} /> <span>Depósito Grabaciones</span>
@@ -997,6 +1011,22 @@ function Home({ user, lang = 'es' }) {
               {showMap
                 ? (lang === 'es' ? 'Ocultar Explorador de Pisos' : 'Hide Floor Explorer')
                 : (lang === 'es' ? 'Explorar Pisos 1, 2 y 3' : 'Explore Floors 1, 2 & 3')}
+            </button>
+          </div>
+
+          {/* Card: Transmisión Celular en Vivo */}
+          <div className="action-hub-card" style={{ borderColor: 'rgba(56, 189, 248, 0.4)', background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.08) 0%, rgba(15, 23, 42, 0.8) 100%)' }}>
+            <div className="action-hub-icon" style={{ background: 'rgba(56, 189, 248, 0.15)', color: 'var(--accent-cyan)' }}>
+              <Icon name="camera" size={24} />
+            </div>
+            <h3>{lang === 'es' ? 'Transmitir Cámara Celular (CCTV)' : 'Live Mobile CCTV Broadcast'}</h3>
+            <p>{lang === 'es' ? 'Conecta la cámara de tu teléfono en tiempo real a la matriz CCTV escolar y audita con IA.' : 'Connect your phone camera as a live school CCTV stream.'}</p>
+            <button
+              className="button primary full-width"
+              style={{ background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' }}
+              onClick={() => navigate('cctv_broadcast')}
+            >
+              📱 {lang === 'es' ? 'Abrir Transmisor Móvil' : 'Open Broadcaster'}
             </button>
           </div>
 
@@ -4377,7 +4407,12 @@ function AdminDetail({ reportId, user }) {
 }
 
 function App() {
-  const [route, setRoute] = useState({ page: 'home', payload: null })
+  const [route, setRoute] = useState(() => {
+    if (typeof window !== 'undefined' && window.location.hash === '#broadcast') {
+      return { page: 'cctv_broadcast', payload: null }
+    }
+    return { page: 'home', payload: null }
+  })
   const [currentUser, setCurrentUser] = useState(getStoredUser)
   const [authModal, setAuthModal] = useState({ open: false, tab: 'register', nextRoute: null })
   const [convivenciaModal, setConvivenciaModal] = useState(false)
@@ -4388,6 +4423,15 @@ function App() {
     setGlobalPage = setRoute
     setGlobalAuthModal = setAuthModal
     setGlobalConvivenciaModal = setConvivenciaModal
+
+    const handleHash = () => {
+      if (window.location.hash === '#broadcast') {
+        setRoute({ page: 'cctv_broadcast', payload: null })
+      }
+    }
+    handleHash()
+    window.addEventListener('hashchange', handleHash)
+    return () => window.removeEventListener('hashchange', handleHash)
   }, [])
 
   useEffect(() => {
