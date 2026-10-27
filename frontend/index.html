@@ -6,6 +6,24 @@
     <meta name="description" content="NEXIA - Convivencia, Seguridad y Mediación Escolar (Grupo Nexus)" />
     <link rel="icon" type="image/png" href="/logo.png" />
     <title>NEXIA · Colegio Alfonso López Michelsen</title>
+    <script>
+      window.addEventListener('error', function(e) {
+        console.error('NEXIA Global Error:', e);
+        var el = document.getElementById('nexia-early-crash');
+        if (!el && (!document.getElementById('root') || document.getElementById('root').children.length === 0)) {
+          el = document.createElement('div');
+          el.id = 'nexia-early-crash';
+          el.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#090e1a;color:#f8fafc;display:flex;align-items:center;justify-content:center;padding:24px;font-family:sans-serif;';
+          el.innerHTML = '<div style="max-width:480px;background:#0f172a;border:1px solid rgba(56,189,248,0.3);border-radius:18px;padding:30px;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,0.8);">' +
+            '<div style="font-size:32px;margin-bottom:12px;">⚠️</div>' +
+            '<h2 style="margin:0 0 8px;font-size:1.3rem;">Actualizando NEXIA</h2>' +
+            '<p style="color:#94a3b8;font-size:0.88rem;margin:0 0 16px;">Detectamos una versión anterior en la memoria de tu navegador. Pulsa el botón para actualizar:</p>' +
+            '<button onclick="localStorage.clear();sessionStorage.clear();location.reload(true);" style="background:#0284c7;color:#fff;border:none;padding:12px 24px;border-radius:10px;font-weight:bold;cursor:pointer;font-size:0.95rem;">🔄 Actualizar y Recargar</button>' +
+            '</div>';
+          document.body ? document.body.appendChild(el) : document.documentElement.appendChild(el);
+        }
+      });
+    </script>
   </head>
   <body>
     <div id="root"></div>

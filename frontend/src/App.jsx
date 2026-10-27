@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { API_BASE_URL, apiRequest, clearSession, getStoredUser, getWebSocketUrl, setSession, uploadVideoWithProgress } from './api/client.js'
+import { API_BASE_URL, apiRequest, clearSession, getStoredUser, getToken, getWebSocketUrl, setSession, uploadVideoWithProgress } from './api/client.js'
 import ArchitecturalSchoolMap from './components/ArchitecturalSchoolMap.jsx'
 import { translations } from './i18n.js'
 
@@ -2480,7 +2480,7 @@ function ConnectPhoneModal({ isOpen, onClose, cameras, selectedCam, liveStatus, 
 /* =========================================================================
    COMPONENTE: TRANSMISOR CCTV MÓVIL (PANTALLA PARA EL CELULAR)
    ========================================================================= */
-function CCTVBroadcaster({ user, lang = 'es' }) {
+function CCTVBroadcaster({ user: _user, lang = 'es' }) {
   const [cameras, setCameras] = useState([])
   const [selectedCamId, setSelectedCamId] = useState('')
   const [facingMode, setFacingMode] = useState('environment') // 'environment' o 'user'
@@ -2675,13 +2675,13 @@ function CCTVBroadcaster({ user, lang = 'es' }) {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       try {
         mediaRecorderRef.current.stop()
-      } catch {}
+      } catch (_e) {}
     }
     if (wsRef.current) {
-      try { wsRef.current.close() } catch {}
+      try { wsRef.current.close() } catch (_e) {}
     }
     if (pcRef.current) {
-      try { pcRef.current.close() } catch {}
+      try { pcRef.current.close() } catch (_e) {}
     }
 
     if (sessionId) {
@@ -2908,7 +2908,7 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
       try {
         const data = await apiRequest('/cctv/live-status')
         if (mounted && data) setLiveStatus(data)
-      } catch {}
+      } catch (_e) {}
     }
     checkLive()
     const intv = setInterval(checkLive, 3000)

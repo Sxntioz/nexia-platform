@@ -13,7 +13,7 @@ function getCookie(name) {
   try {
     const match = document.cookie.match(new RegExp('(^|;\\s*)' + name + '=([^;]+)'))
     return match ? decodeURIComponent(match[2]) : null
-  } catch {
+  } catch (_e) {
     return null
   }
 }
@@ -23,20 +23,26 @@ function setCookie(name, val, days = 730) {
     const d = new Date()
     d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000))
     document.cookie = `${name}=${encodeURIComponent(val)};expires=${d.toUTCString()};path=/;SameSite=Lax`
-  } catch {}
+  } catch (_e) {
+    // Cookie no disponible en el entorno
+  }
 }
 
 function deleteCookie(name) {
   try {
     document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;SameSite=Lax`
-  } catch {}
+  } catch (_e) {
+    // Cookie no disponible en el entorno
+  }
 }
 
 export function getToken() {
   try {
     const fromLocal = localStorage.getItem(TOKEN_KEY)
-    if (fromLocal) return fromLocal
-  } catch {}
+    if (fromLocal && fromLocal !== 'undefined' && fromLocal !== 'null') return fromLocal
+  } catch (_e) {
+    // LocalStorage no disponible
+  }
   return getCookie(TOKEN_KEY)
 }
 
@@ -44,7 +50,9 @@ export function setSession(token, user) {
   try {
     localStorage.setItem(TOKEN_KEY, token)
     localStorage.setItem(USER_KEY, JSON.stringify(user))
-  } catch {}
+  } catch (_e) {
+    // LocalStorage no disponible
+  }
   setCookie(TOKEN_KEY, token)
   setCookie(USER_KEY, JSON.stringify(user))
 }
@@ -52,12 +60,22 @@ export function setSession(token, user) {
 export function getStoredUser() {
   try {
     const raw = localStorage.getItem(USER_KEY)
-    if (raw) return JSON.parse(raw)
-  } catch {}
+    if (raw && raw !== 'undefined' && raw !== 'null') {
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object') return parsed
+    }
+  } catch (_e) {
+    // JSON malformado
+  }
   try {
     const fromCookie = getCookie(USER_KEY)
-    if (fromCookie) return JSON.parse(fromCookie)
-  } catch {}
+    if (fromCookie && fromCookie !== 'undefined' && fromCookie !== 'null') {
+      const parsed = JSON.parse(fromCookie)
+      if (parsed && typeof parsed === 'object') return parsed
+    }
+  } catch (_e) {
+    // Cookie malformada
+  }
   return null
 }
 
@@ -65,7 +83,9 @@ export function clearSession() {
   try {
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(USER_KEY)
-  } catch {}
+  } catch (_e) {
+    // LocalStorage no disponible
+  }
   deleteCookie(TOKEN_KEY)
   deleteCookie(USER_KEY)
 }
@@ -76,7 +96,7 @@ export async function apiRequest(path, options = {}) {
   const headers = {
     ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...options.headers,
+    ...(options.headers || {}),
   }
 
   let response
@@ -94,7 +114,7 @@ export async function apiRequest(path, options = {}) {
           ...options,
           headers,
         })
-      } catch (retryErr) {
+      } catch (_retryErr) {
         throw new Error(
           'El servidor en la nube se está iniciando (tarda unos 30 segundos si estaba inactivo). Por favor intenta de nuevo en un momento.'
         )
@@ -108,177 +128,225 @@ export async function apiRequest(path, options = {}) {
     let message = 'No fue posible completar la solicitud'
     try {
       const body = await response.json()
-      message = typeof body.detail === 'string' ? body.detail : message
+      if (body.detail) {
+        if (typeof body.detail === 'string') {
+          message = body.detail
+        } else if (Array.isArray(body.detail)) {
+          message = body.detail.map((d) => d.msg || JSON.stringify(d)).join(', ')
+        } else {
+          message = JSON.stringify(body.detail)
+        }
+      }
     } catch {
-      // El servidor puede devolver una respuesta sin JSON.
+      message = `${message} (${response.status})`
     }
     throw new Error(message)
   }
 
-  return response.status === 204 ? null : response.json()
+  if (response.status === 204) return null
+  return response.json()
 }
 
 export const API_BASE_URL = API_URL
 
 /**
- * Realiza la subida de un video grabando métricas en tiempo real (bytes, %, velocidad, tiempo restante).
- * Soporta Direct-to-S3 (bypass de proxy con URL prefirmada) y fallback local.
+ * Sube un video con reporte continuo de progreso en tiempo real.
+ * Usa presigned URLs directas a S3 (evitando límites de 4.5MB en Vercel)
+ * con fallback transparente al backend si S3 no está configurado.
+ *
+ * @param {Object} params
+ * @param {File} params.file Archivo de video
+ * @param {string} params.prepareUrl Endpoint para obtener presigned URL (ej. '/admin/recordings/presigned-url')
+ * @param {string} params.completeUrl Endpoint para registrar la grabación en BD (ej. '/admin/recordings/complete-upload')
+ * @param {Object} params.metadata Metadatos del video (camera_id, recording_started_at, duration_seconds)
+ * @param {string} params.fallbackUrl Endpoint tradicional multipart (ej. '/admin/recordings')
+ * @param {Function} params.onProgress Callback (progressInfo) => void
+ * @returns {Promise<Object>} Registro creado
  */
 export async function uploadVideoWithProgress({
   file,
-  prepareUrl = '/admin/recordings/presigned-url',
-  completeUrl = '/admin/recordings/complete-upload',
+  prepareUrl,
+  completeUrl,
   metadata = {},
-  fallbackUrl = '/admin/recordings',
+  fallbackUrl,
   onProgress = () => {},
 }) {
   const token = getToken()
-  const startTime = Date.now()
+  const fileSize = file.size
 
-  onProgress({
-    stage: 'PREPARING',
-    percent: 0,
-    loaded: 0,
-    total: file.size,
-    speedMBps: 0,
-    etaSeconds: null,
-    message: 'Preparando subida segura…',
-  })
-
-  let prepData
+  // Intento 1: Carga directa vía Presigned URL (S3)
   try {
-    prepData = await apiRequest(prepareUrl, {
+    onProgress({
+      stage: 'PREPARING',
+      percent: 5,
+      loaded: 0,
+      total: fileSize,
+      speedMBps: 0,
+      etaSeconds: null,
+      message: 'Preparando enlace seguro de transferencia a S3…',
+    })
+
+    const prep = await apiRequest(prepareUrl, {
       method: 'POST',
       body: JSON.stringify({
-        ...metadata,
-        original_name: file.name,
-        mime_type: file.type || 'video/mp4',
-        size_bytes: file.size,
+        filename: file.name,
+        content_type: file.type || 'video/mp4',
+        file_size_bytes: fileSize,
       }),
     })
-  } catch (err) {
-    console.warn('Fallo al obtener URL prefirmada, usando subida directa al servidor:', err)
-    prepData = { s3_upload: false }
-  }
 
-  const createProgressHandler = (stage, message) => {
-    return (e) => {
-      const total = e.lengthComputable ? e.total : file.size
-      const loaded = e.loaded
-      const percent = Math.min(100, Math.round((loaded / total) * 100))
+    if (prep && prep.upload_url && prep.s3_key) {
+      // Subir archivo binario directo a S3 vía XHR para rastrear progreso en vivo
+      await uploadDirectToS3({
+        uploadUrl: prep.upload_url,
+        file,
+        contentType: prep.content_type || file.type || 'video/mp4',
+        onProgress: ({ percent, loaded, total, speedMBps, etaSeconds }) => {
+          onProgress({
+            stage: 'UPLOADING',
+            percent,
+            loaded,
+            total,
+            speedMBps,
+            etaSeconds,
+            message: `Transfiriendo a almacenamiento seguro (${percent}% - ${speedMBps} MB/s)…`,
+          })
+        },
+      })
 
-      const now = Date.now()
-      const totalElapsedSec = Math.max(0.1, (now - startTime) / 1000)
-      const avgSpeedBytesPerSec = loaded / totalElapsedSec
-      const speedMBps = (avgSpeedBytesPerSec / (1024 * 1024)).toFixed(2)
+      // Notificar al backend que la carga terminó para indexar en BD
+      onProgress({
+        stage: 'FINALIZING',
+        percent: 98,
+        loaded: fileSize,
+        total: fileSize,
+        speedMBps: 0,
+        etaSeconds: null,
+        message: 'Registrando e indexando video en la base de datos…',
+      })
 
-      const remainingBytes = Math.max(0, total - loaded)
-      const etaSeconds = avgSpeedBytesPerSec > 1024 ? Math.round(remainingBytes / avgSpeedBytesPerSec) : null
+      const saved = await apiRequest(completeUrl, {
+        method: 'POST',
+        body: JSON.stringify({
+          s3_key: prep.s3_key,
+          file_name: file.name,
+          file_size_bytes: fileSize,
+          ...metadata,
+        }),
+      })
 
       onProgress({
-        stage,
-        percent,
-        loaded,
-        total,
-        speedMBps: parseFloat(speedMBps) || 0,
-        etaSeconds,
-        message,
+        stage: 'COMPLETED',
+        percent: 100,
+        loaded: fileSize,
+        total: fileSize,
+        speedMBps: 0,
+        etaSeconds: 0,
+        message: 'Video sincronizado e indexado correctamente.',
       })
+
+      return saved
     }
+  } catch (err) {
+    console.warn('Carga directa S3 no disponible o falló, recurriendo a backend:', err)
   }
 
-  // CASO A: Subida directa a Amazon S3 (Sin timeout de Render, máxima velocidad)
-  if (prepData?.s3_upload && prepData?.upload_url) {
-    await new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest()
-      xhr.open('PUT', prepData.upload_url, true)
-      xhr.setRequestHeader('Content-Type', file.type || 'video/mp4')
+  // Intento 2: Fallback tradicional multipart directo al backend
+  return uploadMultipartWithProgress({
+    file,
+    fallbackUrl,
+    metadata,
+    onProgress,
+    token,
+  })
+}
 
-      xhr.upload.onprogress = createProgressHandler(
-        'UPLOADING',
-        'Subiendo directamente a Amazon S3 (Nube)…'
-      )
-
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve()
-        } else {
-          reject(new Error(`Error al transferir a AWS S3 (HTTP ${xhr.status})`))
-        }
-      }
-
-      xhr.onerror = () => reject(new Error('Error de red al conectar con Amazon S3'))
-      xhr.ontimeout = () => reject(new Error('Tiempo de espera agotado al conectar con AWS'))
-      xhr.send(file)
-    })
-
-    onProgress({
-      stage: 'FINALIZING',
-      percent: 100,
-      loaded: file.size,
-      total: file.size,
-      speedMBps: 0,
-      etaSeconds: 0,
-      message: 'Sincronizando y registrando en NEXIA…',
-    })
-
-    const finalResult = await apiRequest(completeUrl, {
-      method: 'POST',
-      body: JSON.stringify({
-        ...metadata,
-        stored_name: prepData.stored_name,
-        original_name: file.name,
-        mime_type: file.type || 'video/mp4',
-        size_bytes: file.size,
-      }),
-    })
-
-    onProgress({
-      stage: 'DONE',
-      percent: 100,
-      loaded: file.size,
-      total: file.size,
-      speedMBps: 0,
-      etaSeconds: 0,
-      message: '¡Video sincronizado exitosamente en AWS S3!',
-    })
-
-    return finalResult
-  }
-
-  // CASO B: Fallback subida tradicional al backend local (con barra de progreso)
-  const fd = new FormData()
-  for (const [key, val] of Object.entries(metadata)) {
-    fd.append(key, val)
-  }
-  fd.append('clip', file)
-
+function uploadDirectToS3({ uploadUrl, file, contentType, onProgress }) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
-    xhr.open('POST', `${API_URL}${fallbackUrl}`, true)
-    if (token) {
-      xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    const startTime = Date.now()
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && e.total > 0) {
+        const percent = Math.min(96, Math.round((e.loaded / e.total) * 95))
+        const elapsedSec = Math.max(0.1, (Date.now() - startTime) / 1000)
+        const speedMBps = Number(((e.loaded / (1024 * 1024)) / elapsedSec).toFixed(1))
+        const remainingBytes = e.total - e.loaded
+        const etaSeconds = speedMBps > 0 ? Math.round((remainingBytes / (1024 * 1024)) / speedMBps) : null
+
+        onProgress({
+          percent,
+          loaded: e.loaded,
+          total: e.total,
+          speedMBps,
+          etaSeconds,
+        })
+      }
     }
 
-    xhr.upload.onprogress = createProgressHandler(
-      'UPLOADING',
-      'Subiendo grabación al servidor…'
-    )
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve()
+      } else {
+        reject(new Error(`Fallo en transferencia S3 (HTTP ${xhr.status})`))
+      }
+    }
+
+    xhr.onerror = () => reject(new Error('Error de red al transferir archivo a S3'))
+    xhr.open('PUT', uploadUrl)
+    xhr.setRequestHeader('Content-Type', contentType)
+    xhr.send(file)
+  })
+}
+
+function uploadMultipartWithProgress({ file, fallbackUrl, metadata, onProgress, token }) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    const startTime = Date.now()
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && e.total > 0) {
+        const percent = Math.min(95, Math.round((e.loaded / e.total) * 95))
+        const elapsedSec = Math.max(0.1, (Date.now() - startTime) / 1000)
+        const speedMBps = Number(((e.loaded / (1024 * 1024)) / elapsedSec).toFixed(1))
+        const remainingBytes = e.total - e.loaded
+        const etaSeconds = speedMBps > 0 ? Math.round((remainingBytes / (1024 * 1024)) / speedMBps) : null
+
+        onProgress({
+          stage: 'UPLOADING',
+          percent,
+          loaded: e.loaded,
+          total: e.total,
+          speedMBps,
+          etaSeconds,
+          message: `Enviando video al servidor (${percent}% - ${speedMBps} MB/s)…`,
+        })
+      }
+    }
+
+    const fd = new FormData()
+    fd.append('file', file)
+    Object.entries(metadata).forEach(([k, v]) => {
+      if (v !== undefined && v !== null) fd.append(k, String(v))
+    })
+
+    xhr.open('POST', `${API_URL}${fallbackUrl}`)
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
 
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         onProgress({
-          stage: 'DONE',
+          stage: 'COMPLETED',
           percent: 100,
           loaded: file.size,
           total: file.size,
           speedMBps: 0,
           etaSeconds: 0,
-          message: '¡Grabación guardada con éxito!',
+          message: 'Video procesado exitosamente.',
         })
         try {
           resolve(JSON.parse(xhr.responseText))
-        } catch {
+        } catch (_e) {
           resolve(null)
         }
       } else {
@@ -286,7 +354,9 @@ export async function uploadVideoWithProgress({
         try {
           const body = JSON.parse(xhr.responseText)
           if (body.detail) msg = body.detail
-        } catch {}
+        } catch (_e) {
+          // formato no json
+        }
         reject(new Error(msg))
       }
     }
