@@ -1319,32 +1319,40 @@ function AuthModal({ isOpen, onClose, defaultTab = 'register', nextRoute, onAuth
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <div>
-            <p className="eyebrow" style={{ color: 'var(--accent-cyan)' }}>ACCESO NEXIA</p>
-            <h2>{sanctionInfo ? 'Cuenta Sancionada' : tab === 'login' ? 'Iniciar sesión' : 'Crear una cuenta'}</h2>
+      <div className="modal-dialog auth-modal-dialog" onClick={(e) => e.stopPropagation()}>
+        <button className="auth-close-btn" onClick={onClose} aria-label="Cerrar ventana" title="Cerrar ventana">
+          <Icon name="close" size={18} />
+        </button>
+
+        <div className="auth-modal-header">
+          <div className="auth-brand-badge">
+            <span className="auth-brand-dot" /> NEXIA SEGURIDAD ESCOLAR
           </div>
-          <button className="icon-button close-button" onClick={onClose} aria-label="Cerrar ventana">
-            <Icon name="close" size={18} />
-          </button>
+          <h2>{sanctionInfo ? 'Cuenta Sancionada' : tab === 'login' ? 'Iniciar sesión' : 'Crear una cuenta'}</h2>
+          <p className="auth-modal-sub">
+            {sanctionInfo
+              ? 'Revisa el motivo de la sanción y radica tu apelación.'
+              : tab === 'login'
+                ? 'Accede al panel de control, monitoreo CCTV y gestión institucional.'
+                : 'Regístrate para radicar reportes protegidos y consultar casos.'}
+          </p>
         </div>
 
         {!sanctionInfo && (
           <div className="auth-tabs">
             <button
               type="button"
-              className={tab === 'register' ? 'active' : ''}
-              onClick={() => { setTab('register'); setError('') }}
-            >
-              Registrarse
-            </button>
-            <button
-              type="button"
               className={tab === 'login' ? 'active' : ''}
               onClick={() => { setTab('login'); setError('') }}
             >
-              Iniciar sesión
+              <Icon name="shield" size={15} /> Iniciar sesión
+            </button>
+            <button
+              type="button"
+              className={tab === 'register' ? 'active' : ''}
+              onClick={() => { setTab('register'); setError('') }}
+            >
+              <Icon name="users" size={15} /> Registrarse
             </button>
           </div>
         )}
@@ -1400,10 +1408,17 @@ function AuthModal({ isOpen, onClose, defaultTab = 'register', nextRoute, onAuth
                 required
                 value={loginForm.password}
                 onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                placeholder="••••••••"
               />
             </label>
-            <button className="button primary wide" disabled={busy}>
-              {busy ? 'Iniciando sesión…' : 'Ingresar'}
+
+            <label className="auth-remember-row">
+              <input type="checkbox" defaultChecked />
+              <span>Recordar mi sesión siempre en este dispositivo</span>
+            </label>
+
+            <button className="auth-btn-submit" disabled={busy}>
+              {busy ? 'Iniciando sesión…' : 'Ingresar a NEXIA'}
             </button>
           </form>
         ) : (
@@ -2362,13 +2377,26 @@ function LiveStreamSpotlight({ camera, session, isMuted }) {
 /* =========================================================================
    COMPONENTE: MODAL PARA CONECTAR SMARTPHONE
    ========================================================================= */
-function ConnectPhoneModal({ isOpen, onClose, cameras, liveStatus, onOpenBroadcaster }) {
+function ConnectPhoneModal({ isOpen, onClose, cameras, selectedCam, liveStatus, onOpenBroadcaster }) {
   const [copied, setCopied] = useState(false)
+  const [modalCamId, setModalCamId] = useState('')
+
+  useEffect(() => {
+    if (selectedCam) {
+      setModalCamId(selectedCam.id)
+    } else if (cameras && cameras.length > 0) {
+      const def = cameras.find(c => c.identifier === 'CAM-CEL-1') || cameras[0]
+      setModalCamId(def.id)
+    }
+  }, [selectedCam, cameras])
+
   if (!isOpen) return null
 
-  const targetCam = cameras.find(c => c.identifier === 'CAM-CEL-1') || cameras[0]
-  const isStreaming = targetCam && Boolean(liveStatus[targetCam.id])
-  const broadcastUrl = `${window.location.origin}/#broadcast`
+  const targetCam = (cameras && cameras.find(c => c.id === modalCamId)) || selectedCam || (cameras && cameras[0])
+  if (!targetCam) return null
+
+  const isStreaming = Boolean(liveStatus[targetCam.id])
+  const broadcastUrl = `${window.location.origin}/#broadcast?cam=${targetCam.id}&ident=${targetCam.identifier}`
 
   const handleCopy = () => {
     navigator.clipboard.writeText(broadcastUrl)
@@ -2378,39 +2406,61 @@ function ConnectPhoneModal({ isOpen, onClose, cameras, liveStatus, onOpenBroadca
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-dialog qr-connect-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px' }}>
-        <div className="modal-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '1.4rem' }}>📱</span>
-            <h3 style={{ margin: 0 }}>Conectar Celular como Cámara CCTV</h3>
+      <div className="modal-dialog qr-connect-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '540px' }}>
+        <button className="auth-close-btn" onClick={onClose} aria-label="Cerrar ventana" title="Cerrar">
+          <Icon name="close" size={18} />
+        </button>
+
+        <div style={{ textAlign: 'left', marginBottom: '16px', paddingRight: '36px' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.74rem', fontWeight: 800, color: 'var(--accent-cyan)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '6px' }}>
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: isStreaming ? '#ef4444' : 'var(--accent-cyan)', boxShadow: isStreaming ? '0 0 10px #ef4444' : 'none' }} />
+            CIRCUITO CERRADO · ENLACE MÓVIL EN TIEMPO REAL
           </div>
-          <button className="text-button" onClick={onClose}>
-            <Icon name="close" size={18} />
-          </button>
+          <h2 style={{ margin: '0 0 4px', fontSize: '1.45rem', fontWeight: 800 }}>
+            Enlazar Celular a {targetCam.label}
+          </h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>
+            {targetCam.location ? `Área: ${targetCam.location} · ` : ''}Transmite video en directo desde la cámara de cualquier teléfono.
+          </p>
         </div>
 
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', margin: '8px 0 16px', lineHeight: 1.5 }}>
-          Convierte la cámara de cualquier teléfono celular en un flujo de CCTV en tiempo real para <strong>CAM Prueba Cel 1</strong> sin instalar ninguna aplicación.
-        </p>
+        {/* Selector de cámara para enlazar cualquier salón */}
+        <div style={{ textAlign: 'left', marginBottom: '14px' }}>
+          <label style={{ fontSize: '0.8rem', color: '#94a3b8', display: 'block', marginBottom: '4px', fontWeight: 600 }}>
+            Seleccionar Salón o Cámara a Transmitir:
+          </label>
+          <select
+            value={modalCamId}
+            onChange={e => setModalCamId(e.target.value)}
+            style={{ width: '100%', padding: '10px 12px', background: 'rgba(15, 23, 42, 0.85)', border: '1px solid rgba(255, 255, 255, 0.15)', borderRadius: '10px', color: '#f8fafc', fontSize: '0.9rem' }}
+          >
+            {cameras.map(c => (
+              <option key={c.id} value={c.id}>
+                {liveStatus[c.id] ? '🔴 [EN VIVO] ' : ''}{c.label} ({c.identifier})
+              </option>
+            ))}
+          </select>
+        </div>
 
         {isStreaming ? (
-          <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid #10b981', padding: '12px', borderRadius: '12px', color: '#10b981', fontWeight: 700, margin: '12px 0' }}>
-            🔴 ¡Señal activa! El celular está transmitiendo en vivo a CAM Prueba Cel 1 ({liveStatus[targetCam.id]?.duration_seconds}s).
+          <div style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid #ef4444', padding: '12px 14px', borderRadius: '12px', color: '#ef4444', fontWeight: 700, margin: '12px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+            <span className="live-pulse" /> ¡SEÑAL EN DIRECTO ACTIVA! ({liveStatus[targetCam.id]?.duration_seconds}s transmitidos)
           </div>
         ) : (
-          <div style={{ background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '10px', borderRadius: '12px', color: 'var(--accent-cyan)', fontSize: '0.85rem', margin: '8px 0' }}>
-            ⏳ Esperando conexión... Abre el enlace en tu celular para comenzar.
+          <div style={{ background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '10px 14px', borderRadius: '12px', color: 'var(--accent-cyan)', fontSize: '0.85rem', margin: '10px 0' }}>
+            ⏳ Escanea el código con tu celular para transmitir en directo hacia <strong>{targetCam.label}</strong>.
           </div>
         )}
 
-        <div className="qr-connect-code">
+        <div className="qr-connect-code" style={{ margin: '14px auto', background: '#fff', padding: '14px', borderRadius: '16px', display: 'inline-block' }}>
           <img
             src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(broadcastUrl)}`}
-            alt="Código QR de Conexión Móvil"
+            alt={`QR Transmisión ${targetCam.identifier}`}
+            style={{ display: 'block', width: '200px', height: '200px' }}
           />
         </div>
 
-        <div style={{ background: 'rgba(0, 0, 0, 0.3)', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '0.85rem', wordBreak: 'break-all', fontFamily: 'monospace', margin: '10px 0' }}>
+        <div style={{ background: 'rgba(0, 0, 0, 0.35)', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '0.82rem', wordBreak: 'break-all', fontFamily: 'monospace', margin: '8px 0', color: '#94a3b8' }}>
           {broadcastUrl}
         </div>
 
@@ -2418,7 +2468,7 @@ function ConnectPhoneModal({ isOpen, onClose, cameras, liveStatus, onOpenBroadca
           <button className="button secondary small" onClick={handleCopy} style={{ flex: 1 }}>
             {copied ? '✅ ¡Enlace Copiado!' : '📋 Copiar Enlace'}
           </button>
-          <button className="button primary small" onClick={() => { onClose(); onOpenBroadcaster(); }} style={{ flex: 1 }}>
+          <button className="button primary small" onClick={() => { onClose(); onOpenBroadcaster(targetCam); }} style={{ flex: 1 }}>
             🚀 Abrir Transmisor Aquí
           </button>
         </div>
@@ -2450,13 +2500,23 @@ function CCTVBroadcaster({ user, lang = 'es' }) {
   const pcRef = useRef(null)
   const timerRef = useRef(null)
 
-  // Cargar cámaras disponibles
+  // Cargar cámaras disponibles y enlazar cámara recibida por URL
   useEffect(() => {
     apiRequest('/cameras/public-catalog')
       .then(cams => {
         if (Array.isArray(cams)) {
           setCameras(cams)
-          const def = cams.find(c => c.identifier === 'CAM-CEL-1') || cams[0]
+          // Extraer cámara especificada en hash o query string: #broadcast?cam=xyz
+          const hashQuery = window.location.hash.includes('?') ? window.location.hash.split('?')[1] : ''
+          const search = window.location.search ? window.location.search.slice(1) : ''
+          const params = new URLSearchParams(hashQuery || search)
+          const camParam = params.get('cam') || params.get('camera') || params.get('ident')
+          
+          let matched = null
+          if (camParam) {
+            matched = cams.find(c => c.id === camParam || c.identifier === camParam)
+          }
+          const def = matched || cams.find(c => c.identifier === 'CAM-CEL-1') || cams[0]
           if (def) setSelectedCamId(def.id)
         }
       })
@@ -2693,12 +2753,12 @@ function CCTVBroadcaster({ user, lang = 'es' }) {
               Duración grabada: <strong>{formatTimer(successInfo.duration)}</strong> ({formatBytes(successInfo.bytes)}).
               Este video ya está registrado y listo en el depósito para que Gemini IA recorte y analice cualquier reporte escolar.
             </p>
-            <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
               <button
                 className="button primary small"
-                onClick={() => navigate('report', { location: 'CAM Prueba Cel 1', floor: 'Cámaras Móviles / Pruebas en Vivo' })}
+                onClick={() => navigate('report', { location: selectedCam?.location || selectedCam?.label || 'CAM Prueba Cel 1' })}
               >
-                📋 Crear Reporte con este Video
+                📋 Crear Reporte para {selectedCam?.label || 'esta cámara'}
               </button>
               <button className="button secondary small" onClick={() => setSuccessInfo(null)}>
                 Cerrar
@@ -2803,46 +2863,29 @@ function CCTVBroadcaster({ user, lang = 'es' }) {
    ========================================================================= */
 function AdminLiveCCTV({ user, lang = 'es' }) {
   const [cameras, setCameras] = useState([])
-  const [recordings, setRecordings] = useState([])
   const [selectedCam, setSelectedCam] = useState(null)
-  const [selectedRec, setSelectedRec] = useState(null)
   const [floorFilter, setFloorFilter] = useState('ALL') // 'ALL', 'CEL', '1', '2', '3'
   const [viewMode, setViewMode] = useState('spotlight') // 'spotlight', 'grid2', 'grid3'
   const [aiOverlay, setAiOverlay] = useState(true)
   const [isMuted, setIsMuted] = useState(true)
   const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString())
   const [_busy, setBusy] = useState(true)
-  const [uploadModal, setUploadModal] = useState(false)
   const [connectModal, setConnectModal] = useState(false)
   const [liveStatus, setLiveStatus] = useState({})
   const [isTheater, setIsTheater] = useState(false)
-  const [uploadForm, setUploadForm] = useState({ camera_id: '', duration_seconds: '960' })
-  const [uploadFile, setUploadFile] = useState(null)
-  const [uploading, setUploading] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState(null)
-  const [uploadMsg, setUploadMsg] = useState('')
   const t = translations[lang] || translations.es
 
   const loadData = useCallback(async () => {
     setBusy(true)
     try {
-      const [cams, recs] = await Promise.all([
-        apiRequest('/admin/cameras'),
-        apiRequest('/admin/recordings'),
-      ])
+      const cams = await apiRequest('/admin/cameras')
       setCameras(cams)
-      setRecordings(recs)
 
       if (cams.length > 0) {
-        // Prefer a camera with an uploaded recording
-        const camWithRec = cams.find(c => recs.some(r => r.camera_id === c.id))
-        const defCam = camWithRec || cams[0]
-        setSelectedCam(defCam)
-        const matchRec = recs.find(r => r.camera_id === defCam.id)
-        setSelectedRec(matchRec || null)
+        setSelectedCam(prev => prev ? (cams.find(c => c.id === prev.id) || cams[0]) : cams[0])
       }
     } catch (err) {
-      console.error("Error loading CCTV data", err)
+      console.error("Error loading CCTV cameras", err)
     } finally {
       setBusy(false)
     }
@@ -2877,9 +2920,6 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
 
   const handleSelectCam = (cam) => {
     setSelectedCam(cam)
-    const rec = recordings.find(r => r.camera_id === cam.id)
-    setSelectedRec(rec || null)
-    setUploadForm(f => ({ ...f, camera_id: cam.id }))
   }
 
   const filteredCameras = useMemo(() => {
@@ -2967,21 +3007,23 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
             <div className="cctv-clock-badge">
               <Icon name="clock" size={14} />
               <span>{currentTime} COT</span>
-              <small style={{ color: 'var(--accent-cyan)', marginLeft: '4px' }}>RTSP/H.265</small>
+              <small style={{ color: Object.keys(liveStatus).length > 0 ? '#ef4444' : 'var(--accent-cyan)', marginLeft: '4px', fontWeight: 700 }}>
+                {Object.keys(liveStatus).length > 0 ? `🔴 ${Object.keys(liveStatus).length} EN VIVO` : 'WEBRTC / STANDBY'}
+              </small>
             </div>
             <button
               className="button primary small"
               onClick={() => setConnectModal(true)}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' }}
             >
-              <Icon name="camera" size={14} /> 📱 Transmitir con Celular
+              <Icon name="camera" size={14} /> 📱 Enlazar Celular en Vivo
             </button>
             <button
               className="button secondary small"
-              onClick={() => setUploadModal(true)}
+              onClick={() => navigate('admin_recordings')}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
             >
-              <Icon name="upload" size={14} /> {t.cctvUploadShortcut}
+              <Icon name="film" size={14} /> Depósito Grabaciones
             </button>
           </div>
         </div>
@@ -3068,7 +3110,7 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
                   </div>
                 </div>
 
-                {/* Video Player or Simulated Viewport */}
+                {/* Video Player or Standby Viewport */}
                 <div className="cctv-video-container">
                   {selectedCam && liveStatus[selectedCam.id] ? (
                     <LiveStreamSpotlight
@@ -3076,35 +3118,41 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
                       session={liveStatus[selectedCam.id]}
                       isMuted={isMuted}
                     />
-                  ) : activeRec ? (
-                    <video
-                      key={activeRec.id}
-                      src={`${API_BASE_URL}/recordings/${activeRec.id}/stream`}
-                      autoPlay
-                      loop
-                      muted={isMuted}
-                      playsInline
-                      controls
-                      className="cctv-video-stream"
-                    />
                   ) : (
                     <div className="cctv-simulated-feed">
                       <div className="cctv-scanline-fx" />
                       <div className="cctv-noise-overlay" />
                       <div className="cctv-crosshair" />
-                      <div className="cctv-simulated-center">
-                        <Icon name="video" size={48} />
-                        <h4>{selectedCam?.label || 'Señal de Cámara en Vivo'}</h4>
-                        <p>{selectedCam?.identifier === 'CAM-CEL-1' ? 'Cámara lista para recibir señal en vivo desde celular.' : t.cctvNoVideoWarning}</p>
-                        {selectedCam?.identifier === 'CAM-CEL-1' ? (
-                          <button className="button primary small" onClick={() => setConnectModal(true)}>
-                            📱 Iniciar Transmisión desde Celular
+                      <div className="cctv-simulated-center" style={{ maxWidth: '460px', padding: '24px' }}>
+                        <div style={{ position: 'relative', display: 'inline-block', marginBottom: '10px' }}>
+                          <Icon name="video" size={44} />
+                        </div>
+                        <div style={{ fontSize: '0.74rem', fontWeight: 800, letterSpacing: '0.12em', color: 'var(--accent-cyan)', textTransform: 'uppercase', marginBottom: '6px' }}>
+                          SEÑAL EN ESPERA · LISTA PARA TRANSMITIR
+                        </div>
+                        <h3 style={{ margin: '0 0 6px', fontSize: '1.25rem', color: '#f8fafc' }}>
+                          {selectedCam?.label || 'Cámara Escolar'} ({selectedCam?.identifier})
+                        </h3>
+                        <p style={{ margin: '0 0 16px', color: '#94a3b8', fontSize: '0.85rem', lineHeight: 1.5 }}>
+                          {selectedCam?.location ? `Ubicación: ${selectedCam.location}. ` : ''}
+                          Canal de circuito cerrado listo para recibir transmisión en tiempo real desde cualquier teléfono celular.
+                        </p>
+                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                          <button
+                            className="button primary small"
+                            onClick={() => setConnectModal(true)}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 18px', fontWeight: 700 }}
+                          >
+                            <Icon name="camera" size={16} /> 📱 Enlazar Celular a esta Cámara
                           </button>
-                        ) : (
-                          <button className="button primary small" onClick={() => setUploadModal(true)}>
-                            {t.cctvUploadShortcut}
+                          <button
+                            className="button secondary small"
+                            onClick={() => navigate('admin_recordings')}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                          >
+                            <Icon name="film" size={14} /> Ver Depósito
                           </button>
-                        )}
+                        </div>
                       </div>
                     </div>
                   )}
@@ -3143,11 +3191,7 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
                       <Icon name={isMuted ? 'mute' : 'volume'} size={16} />
                       {isMuted ? 'Silenciado' : 'Sonido'}
                     </button>
-                    {activeRec && (
-                      <span className="badge success" style={{ fontSize: '0.72rem' }}>
-                        Archivo: {activeRec.original_name}
-                      </span>
-                    )}
+
                   </div>
                 </div>
               </div>
@@ -3159,15 +3203,14 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
                 <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700 }}>
                   Canales ({filteredCameras.length})
                 </h3>
-                <small style={{ color: 'var(--accent-cyan)' }}>
-                  {recordings.length} con grabación
+                <small style={{ color: Object.keys(liveStatus).length > 0 ? '#ef4444' : 'var(--accent-cyan)', fontWeight: 600 }}>
+                  {Object.keys(liveStatus).length > 0 ? `🔴 ${Object.keys(liveStatus).length} en vivo` : 'Standby'}
                 </small>
               </div>
 
               <div className="cctv-camera-cards-list">
                 {filteredCameras.map(c => {
                   const isLive = Boolean(liveStatus[c.id])
-                  const hasRec = recordings.some(r => r.camera_id === c.id)
                   const isSelected = selectedCam?.id === c.id
                   return (
                     <div
@@ -3176,14 +3219,19 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
                       onClick={() => handleSelectCam(c)}
                     >
                       <div className="cctv-card-thumb">
-                        <span className={`cctv-dot ${isLive ? 'live-phone' : (hasRec ? 'has-video' : 'live')}`} />
+                        <span className={`cctv-dot ${isLive ? 'live-phone' : 'live'}`} />
                         <span className="thumb-cam-id">{c.identifier}</span>
-                        {isLive && <span className="video-badge" style={{ background: '#ef4444' }}>🔴 VIVO</span>}
-                        {!isLive && hasRec && <span className="video-badge">REC</span>}
+                        {isLive ? (
+                          <span className="video-badge" style={{ background: '#ef4444' }}>🔴 VIVO</span>
+                        ) : (
+                          <span className="video-badge" style={{ background: 'rgba(30, 41, 59, 0.85)', color: '#94a3b8' }}>ESPERA</span>
+                        )}
                       </div>
                       <div className="cctv-card-info">
                         <strong>{c.label}</strong>
-                        <small>{isLive ? `🔴 En directo (${liveStatus[c.id].duration_seconds}s)` : c.location}</small>
+                        <small style={{ color: isLive ? '#ef4444' : 'var(--text-muted)' }}>
+                          {isLive ? `🔴 En directo (${liveStatus[c.id].duration_seconds}s)` : c.location}
+                        </small>
                       </div>
                     </div>
                   )
@@ -3195,26 +3243,24 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
           /* Multi-Monitor Grid Layout (2x2 or 3x3) */
           <div className={`cctv-multigrid ${viewMode}`}>
             {filteredCameras.slice(0, viewMode === 'grid2' ? 4 : 9).map(cam => {
-              const camRec = recordings.find(r => r.camera_id === cam.id)
+              const isLive = Boolean(liveStatus[cam.id])
               return (
                 <div key={cam.id} className="cctv-grid-cell" onClick={() => { setSelectedCam(cam); setViewMode('spotlight'); }}>
                   <div className="grid-cell-hud">
-                    <span>REC ● {cam.identifier}</span>
+                    <span>{isLive ? '🔴 EN VIVO' : 'STANDBY'} ● {cam.identifier}</span>
                     <small>{cam.label}</small>
                   </div>
-                  {camRec ? (
-                    <video
-                      src={`${API_BASE_URL}/recordings/${camRec.id}/stream`}
-                      autoPlay
-                      loop
-                      muted
-                      playsInline
-                      className="grid-cell-video"
+                  {isLive ? (
+                    <LiveStreamSpotlight
+                      camera={cam}
+                      session={liveStatus[cam.id]}
+                      isMuted={true}
                     />
                   ) : (
                     <div className="grid-cell-simulated">
                       <Icon name="video" size={28} />
-                      <small>{cam.label}</small>
+                      <small style={{ marginTop: '4px' }}>{cam.label}</small>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--accent-cyan)', marginTop: '2px' }}>📱 Clic para enlazar celular</span>
                     </div>
                   )}
                   {aiOverlay && (
@@ -3233,8 +3279,9 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
           isOpen={connectModal}
           onClose={() => setConnectModal(false)}
           cameras={cameras}
+          selectedCam={selectedCam}
           liveStatus={liveStatus}
-          onOpenBroadcaster={() => navigate('cctv_broadcast')}
+          onOpenBroadcaster={(cam) => navigate('cctv_broadcast', { camera_id: cam?.id })}
         />
 
         {/* Modal para subir grabación a cámara */}
@@ -4425,13 +4472,34 @@ function App() {
     setGlobalConvivenciaModal = setConvivenciaModal
 
     const handleHash = () => {
-      if (window.location.hash === '#broadcast') {
+      if (window.location.hash.startsWith('#broadcast')) {
         setRoute({ page: 'cctv_broadcast', payload: null })
       }
     }
     handleHash()
     window.addEventListener('hashchange', handleHash)
     return () => window.removeEventListener('hashchange', handleHash)
+  }, [])
+
+  // Sincronizar y renovar sesión silenciosamente en segundo plano sin cerrar nunca
+  useEffect(() => {
+    const token = getToken()
+    if (token) {
+      apiRequest('/auth/me')
+        .then(freshUser => {
+          if (freshUser) {
+            setSession(token, freshUser)
+            setCurrentUser(freshUser)
+          }
+        })
+        .catch(err => {
+          const msg = err?.message?.toLowerCase() || ''
+          if (msg.includes('401') || msg.includes('no autorizado') || msg.includes('token')) {
+            clearSession()
+            setCurrentUser(null)
+          }
+        })
+    }
   }, [])
 
   useEffect(() => {

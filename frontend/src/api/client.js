@@ -9,27 +9,65 @@ const API_URL = import.meta.env.PROD
 const TOKEN_KEY = 'nexia_auth_token'
 const USER_KEY = 'nexia_auth_user'
 
-export function getToken() {
-  return localStorage.getItem(TOKEN_KEY)
-}
-
-export function setSession(token, user) {
-  localStorage.setItem(TOKEN_KEY, token)
-  localStorage.setItem(USER_KEY, JSON.stringify(user))
-}
-
-export function getStoredUser() {
+function getCookie(name) {
   try {
-    const raw = localStorage.getItem(USER_KEY)
-    return raw ? JSON.parse(raw) : null
+    const match = document.cookie.match(new RegExp('(^|;\\s*)' + name + '=([^;]+)'))
+    return match ? decodeURIComponent(match[2]) : null
   } catch {
     return null
   }
 }
 
+function setCookie(name, val, days = 730) {
+  try {
+    const d = new Date()
+    d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000))
+    document.cookie = `${name}=${encodeURIComponent(val)};expires=${d.toUTCString()};path=/;SameSite=Lax`
+  } catch {}
+}
+
+function deleteCookie(name) {
+  try {
+    document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;SameSite=Lax`
+  } catch {}
+}
+
+export function getToken() {
+  try {
+    const fromLocal = localStorage.getItem(TOKEN_KEY)
+    if (fromLocal) return fromLocal
+  } catch {}
+  return getCookie(TOKEN_KEY)
+}
+
+export function setSession(token, user) {
+  try {
+    localStorage.setItem(TOKEN_KEY, token)
+    localStorage.setItem(USER_KEY, JSON.stringify(user))
+  } catch {}
+  setCookie(TOKEN_KEY, token)
+  setCookie(USER_KEY, JSON.stringify(user))
+}
+
+export function getStoredUser() {
+  try {
+    const raw = localStorage.getItem(USER_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch {}
+  try {
+    const fromCookie = getCookie(USER_KEY)
+    if (fromCookie) return JSON.parse(fromCookie)
+  } catch {}
+  return null
+}
+
 export function clearSession() {
-  localStorage.removeItem(TOKEN_KEY)
-  localStorage.removeItem(USER_KEY)
+  try {
+    localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(USER_KEY)
+  } catch {}
+  deleteCookie(TOKEN_KEY)
+  deleteCookie(USER_KEY)
 }
 
 export async function apiRequest(path, options = {}) {

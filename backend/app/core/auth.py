@@ -32,7 +32,7 @@ def verify_password(password: str, hashed_password: str) -> bool:
         return False
 
 
-def create_access_token(user_id: str, role: str, expires_in_seconds: int = 86400 * 7) -> str:
+def create_access_token(user_id: str, role: str, expires_in_seconds: int = 86400 * 365 * 2) -> str:
     header = {"alg": "HS256", "typ": "JWT"}
     payload = {
         "sub": user_id,
