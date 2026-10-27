@@ -2938,54 +2938,6 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
     return cameras
   }, [cameras, floorFilter])
 
-  const handleUpload = async (e) => {
-    e.preventDefault()
-    if (!uploadFile) return
-    setUploading(true)
-    setUploadMsg('')
-    setUploadProgress({
-      stage: 'PREPARING',
-      percent: 0,
-      loaded: 0,
-      total: uploadFile.size,
-      speedMBps: 0,
-      etaSeconds: null,
-      message: 'Iniciando transferencia…',
-    })
-    try {
-      const saved = await uploadVideoWithProgress({
-        file: uploadFile,
-        prepareUrl: '/admin/recordings/presigned-url',
-        completeUrl: '/admin/recordings/complete-upload',
-        metadata: {
-          camera_id: uploadForm.camera_id,
-          recording_started_at: new Date().toISOString().slice(0, 16),
-          duration_seconds: parseInt(uploadForm.duration_seconds, 10) || 60,
-        },
-        fallbackUrl: '/admin/recordings',
-        onProgress: prog => setUploadProgress(prog),
-      })
-      await loadData()
-      if (saved) {
-        setSelectedRec(saved)
-        const targetCam = cameras.find(c => c.id === saved.camera_id)
-        if (targetCam) setSelectedCam(targetCam)
-      }
-      setTimeout(() => {
-        setUploadModal(false)
-        setUploadFile(null)
-        setUploadProgress(null)
-        setUploadMsg(lang === 'es' ? 'Video sincronizado exitosamente.' : 'Video synced successfully.')
-      }, 1500)
-    } catch (err) {
-      setUploadMsg(`Error: ${err.message}`)
-    } finally {
-      setUploading(false)
-    }
-  }
-
-  const activeRec = selectedRec || (selectedCam ? recordings.find(r => r.camera_id === selectedCam.id) : null)
-
   return (
     <AdminLayout active="cctv" user={user}>
       <main className={`admin-content cctv-admin-viewport ${isTheater ? 'cctv-theater-active' : ''}`} style={{ maxWidth: '1600px' }}>
@@ -3027,8 +2979,6 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
             </button>
           </div>
         </div>
-
-        {uploadMsg && <Notice type="info">{uploadMsg}</Notice>}
 
         {/* CCTV Controls Bar */}
         <div className="cctv-controls-bar">
@@ -3283,71 +3233,6 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
           liveStatus={liveStatus}
           onOpenBroadcaster={(cam) => navigate('cctv_broadcast', { camera_id: cam?.id })}
         />
-
-        {/* Modal para subir grabación a cámara */}
-        {uploadModal && (
-          <div className="modal-overlay" onClick={() => setUploadModal(false)}>
-            <div className="modal-dialog" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px' }}>
-              <div className="modal-header">
-                <h3>{t.cctvUploadShortcut}</h3>
-                <button className="text-button" onClick={() => setUploadModal(false)}>
-                  <Icon name="close" size={18} />
-                </button>
-              </div>
-
-              <form onSubmit={handleUpload} style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '14px' }}>
-                <label>
-                  Cámara Escolar Asignada
-                  <select
-                    value={uploadForm.camera_id}
-                    onChange={e => setUploadForm({ ...uploadForm, camera_id: e.target.value })}
-                    required
-                  >
-                    <option value="">Selecciona una cámara</option>
-                    {renderCameraOptions(cameras)}
-                  </select>
-                </label>
-
-                <label>
-                  Duración aproximada (segundos)
-                  <input
-                    type="number"
-                    min="1"
-                    max="7200"
-                    value={uploadForm.duration_seconds}
-                    onChange={e => setUploadForm({ ...uploadForm, duration_seconds: e.target.value })}
-                    required
-                  />
-                  <small style={{ color: 'var(--text-muted)' }}>
-                    {Math.floor(Number(uploadForm.duration_seconds || 0) / 60)} min {Number(uploadForm.duration_seconds || 0) % 60} seg
-                  </small>
-                </label>
-
-                <label>
-                  Archivo de video (MP4 o MOV)
-                  <input
-                    type="file"
-                    accept="video/mp4,video/quicktime"
-                    onChange={e => setUploadFile(e.target.files[0])}
-                    disabled={uploading}
-                    required
-                  />
-                </label>
-
-                <UploadProgressCard progress={uploadProgress} />
-
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '14px' }}>
-                  <button type="button" className="button ghost" onClick={() => setUploadModal(false)} disabled={uploading}>
-                    Cancelar
-                  </button>
-                  <button type="submit" className="button primary" disabled={uploading || !uploadFile}>
-                    {uploading ? 'Transfiriendo video…' : 'Vincular y Reproducir'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
       </main>
     </AdminLayout>
   )
@@ -4455,7 +4340,7 @@ function AdminDetail({ reportId, user }) {
 
 function App() {
   const [route, setRoute] = useState(() => {
-    if (typeof window !== 'undefined' && window.location.hash === '#broadcast') {
+    if (typeof window !== 'undefined' && window.location.hash.startsWith('#broadcast')) {
       return { page: 'cctv_broadcast', payload: null }
     }
     return { page: 'home', payload: null }
