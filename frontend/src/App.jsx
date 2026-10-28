@@ -2548,11 +2548,12 @@ function CCTVBroadcaster({ user }) {
   useEffect(() => {
     let localStream = null
     const initCam = async () => {
+      if (!navigator?.mediaDevices?.getUserMedia) {
+        setErrorMsg('Tu navegador no soporta captura de video o necesitas acceder mediante conexión segura (HTTPS).')
+        return
+      }
       try {
         setErrorMsg('')
-        if (stream) {
-          stream.getTracks().forEach(t => t.stop())
-        }
         const s = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode,
@@ -2566,12 +2567,14 @@ function CCTVBroadcaster({ user }) {
         setStream(s)
         if (videoPreviewRef.current) {
           videoPreviewRef.current.srcObject = s
+          videoPreviewRef.current.play().catch(() => {})
         }
       } catch (err) {
         console.error('Error al acceder a la cámara:', err)
-        setErrorMsg('No se pudo acceder a la cámara. Por favor permite los permisos en tu navegador.')
+        setErrorMsg('No se pudo acceder a la cámara del dispositivo. Por favor verifica que tu navegador tenga los permisos de cámara concedidos.')
       }
     }
+
     initCam()
 
     return () => {
@@ -2580,6 +2583,16 @@ function CCTVBroadcaster({ user }) {
       }
     }
   }, [facingMode])
+
+  // Vincular stream al elemento de video cuando se monte el visor o se actualice el usuario
+  useEffect(() => {
+    if (videoPreviewRef.current && stream) {
+      if (videoPreviewRef.current.srcObject !== stream) {
+        videoPreviewRef.current.srcObject = stream
+      }
+      videoPreviewRef.current.play().catch(() => {})
+    }
+  }, [stream, user])
 
   // Iniciar transmisión en vivo
   const handleStartBroadcast = async () => {
@@ -2751,7 +2764,11 @@ function CCTVBroadcaster({ user }) {
 
   const selectedCam = cameras.find(c => c.id === selectedCamId)
 
-  if (!user || user.role !== 'admin') {
+  const isAdmin = Boolean(
+    user && (user.role === 'ADMIN' || user.role?.toUpperCase() === 'ADMIN' || user.role?.toLowerCase() === 'admin')
+  )
+
+  if (!isAdmin) {
     return (
       <div className="broadcaster-shell" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', padding: '20px' }}>
         <div style={{ maxWidth: '440px', width: '100%', background: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '20px', padding: '28px', textAlign: 'center', boxShadow: '0 20px 50px rgba(0,0,0,0.6)' }}>
@@ -2759,16 +2776,22 @@ function CCTVBroadcaster({ user }) {
           <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#f8fafc', marginBottom: '8px' }}>
             Acceso Directivo Requerido
           </h2>
-          <p style={{ fontSize: '0.86rem', color: '#94a3b8', lineHeight: 1.5, marginBottom: '20px' }}>
-            Para vincular este dispositivo móvil y transmitir en vivo a las cámaras del circuito escolar, debes iniciar sesión con una cuenta institucional de directivo.
-          </p>
+          {user ? (
+            <p style={{ fontSize: '0.86rem', color: '#94a3b8', lineHeight: 1.5, marginBottom: '20px' }}>
+              Has iniciado sesión como <strong style={{ color: '#fff' }}>{user.full_name || user.email}</strong>, pero tu rol actual es <span style={{ color: 'var(--accent-cyan)', fontWeight: 700 }}>{user.institution_relation || user.role}</span>. Para emitir a las cámaras del circuito escolar se requiere una cuenta institucional con rol directivo o de administrador.
+            </p>
+          ) : (
+            <p style={{ fontSize: '0.86rem', color: '#94a3b8', lineHeight: 1.5, marginBottom: '20px' }}>
+              Para vincular este dispositivo móvil y transmitir en vivo a las cámaras del circuito escolar, debes iniciar sesión con una cuenta institucional de directivo.
+            </p>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <button
               className="button primary"
               onClick={() => promptAuth('login')}
               style={{ width: '100%', padding: '12px', justifyContent: 'center' }}
             >
-              🔐 Iniciar Sesión de Administrador
+              🔐 {user ? 'Cambiar a Cuenta de Administrador' : 'Iniciar Sesión de Administrador'}
             </button>
             <button
               className="button ghost"
