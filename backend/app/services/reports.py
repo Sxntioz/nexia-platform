@@ -48,6 +48,7 @@ def analysis_dict(job: AnalysisJob) -> dict:
             suggested_type=job.result.suggested_type,
             summary=job.result.summary,
             confidence_level=job.result.confidence_level,
+            recommendation=getattr(job.result, "recommendation", None),
             relevant_moments=json.loads(job.result.relevant_moments_json),
         )
     return data

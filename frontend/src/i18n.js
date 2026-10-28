@@ -13,7 +13,7 @@ export const translations = {
     // App Command Console (Web Application Hub)
     appHubBadge: 'NEXIA OS · CONSOLA OPERATIVA ESCOLAR',
     appHubTitle: 'Plataforma de Mediación, Convivencia y Seguridad Escolar',
-    appHubSubtitle: 'Centro de acción rápida para radicación segura, seguimiento confidencial de casos y análisis de convivencia con Motor NEXIA en el Colegio Alfonso López Michelsen.',
+    appHubSubtitle: 'Centro de acción rápida para radicación segura, seguimiento confidencial de casos y análisis de convivencia con Motor NEXIA para colegios e instituciones educativas.',
     
     // Quick Action Grid
     actionNewReportTitle: 'Radicar Reporte Confidencial',
@@ -69,7 +69,7 @@ export const translations = {
     // Manual Banner Section
     normativeBadge: 'Marco Normativo Vigente',
     manualBannerTitle: 'Manual de Convivencia Escolar Oficial',
-    manualBannerDesc: 'Conoce las rutas de atención integral para la convivencia escolar, tipificación de faltas (Ley 1620 de 2013) y garantías del debido proceso en el Colegio Alfonso López Michelsen.',
+    manualBannerDesc: 'Conoce las rutas de atención integral para la convivencia escolar, tipificación de faltas (Ley 1620 de 2013) y garantías del debido proceso en la institución educativa.',
     btnViewSummary: 'Ver Resumen de Faltas',
     btnDownloadOfficialPdf: 'Descargar PDF Oficial',
 
@@ -147,7 +147,7 @@ export const translations = {
     btnClose: 'Cerrar',
 
     // Chatbot
-    chatGreeting: '¡Hola! Soy **NEXIA Copilot**, el copiloto oficial de convivencia escolar del Colegio Alfonso López Michelsen. ¿En qué te puedo orientar hoy?',
+    chatGreeting: '¡Hola! Soy **NEXIA Copilot**, el copiloto oficial de convivencia escolar y mediación institucional. ¿En qué te puedo orientar hoy?',
     chatInputPlaceholder: 'Haz una pregunta a NEXIA Copilot (acoso, hurtos, salones, normas)…',
     chatTabStudents: 'Estudiantes / Familias',
     chatTabAdmin: 'Directivos / Soporte',
@@ -168,7 +168,7 @@ export const translations = {
     // App Command Console (Web Application Hub)
     appHubBadge: 'NEXIA OS · SCHOOL COMMAND CONSOLE',
     appHubTitle: 'School Coexistence, Mediation & Safety Platform',
-    appHubSubtitle: 'High-speed action center for confidential reporting, anonymous case tracking, and NEXIA restorative resolution at Alfonso López Michelsen School.',
+    appHubSubtitle: 'High-speed action center for confidential reporting, anonymous case tracking, and NEXIA restorative resolution for schools and educational institutions.',
 
     // Quick Action Grid
     actionNewReportTitle: 'Submit Confidential Report',
@@ -224,7 +224,7 @@ export const translations = {
     // Manual Banner Section
     normativeBadge: 'Current Regulatory Framework',
     manualBannerTitle: 'Official School Coexistence Handbook',
-    manualBannerDesc: 'Learn about integral attention routes for school climate, infraction categorization (Law 1620 of 2013), and due process guarantees at Alfonso López Michelsen School.',
+    manualBannerDesc: 'Learn about integral attention routes for school climate, infraction categorization (Law 1620 of 2013), and due process guarantees in the educational institution.',
     btnViewSummary: 'View Infraction Summary',
     btnDownloadOfficialPdf: 'Download Official PDF',
 
@@ -302,7 +302,7 @@ export const translations = {
     btnClose: 'Close',
 
     // Chatbot
-    chatGreeting: 'Hello! I am **NEXIA Copilot**, the official school climate copilot for Alfonso López Michelsen School. How can I help you today?',
+    chatGreeting: 'Hello! I am **NEXIA Copilot**, the official school climate and restorative resolution copilot. How can I help you today?',
     chatInputPlaceholder: 'Ask a question to NEXIA Copilot (bullying, theft, classrooms, rules)…',
     chatTabStudents: 'Students / Families',
     chatTabAdmin: 'Admins / Support',

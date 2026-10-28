@@ -192,6 +192,13 @@ function Logo({ compact = false }) {
 
 let setGlobalPage = () => {}
 function navigate(page, payload = null) {
+  if (page !== 'cctv_broadcast' && typeof window !== 'undefined' && window.location.hash) {
+    try {
+      history.replaceState(null, '', window.location.pathname + window.location.search)
+    } catch (_e) {
+      window.location.hash = ''
+    }
+  }
   setGlobalPage({ page, payload })
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
@@ -411,9 +418,10 @@ function Header({ user, theme, lang = 'es', onToggleTheme, onToggleLang, onLogou
             <div className="mobile-drawer-header">
               <span className="mobile-drawer-title">MENÚ PRINCIPAL</span>
               <button
-                className="icon-button close-button"
+                className="mobile-close-btn"
                 onClick={() => setMobileMenuOpen(false)}
                 aria-label="Cerrar menú"
+                title="Cerrar menú"
               >
                 <Icon name="close" size={18} />
               </button>
@@ -428,13 +436,7 @@ function Header({ user, theme, lang = 'es', onToggleTheme, onToggleLang, onLogou
             <button className="mobile-link" onClick={() => handleNav('track')}>
               <Icon name="search" size={18} /> <span>{t.navTrack}</span>
             </button>
-            <button
-              className="mobile-link"
-              style={{ background: 'rgba(56, 189, 248, 0.15)', border: '1px solid rgba(56, 189, 248, 0.4)', color: '#38bdf8', fontWeight: 700 }}
-              onClick={() => handleNav('cctv_broadcast')}
-            >
-              <Icon name="camera" size={18} /> <span>📱 Transmitir con Celular (CCTV)</span>
-            </button>
+
 
             {isAdmin && (
               <div className="mobile-admin-block">
@@ -2020,15 +2022,25 @@ function AdminLayout({ children, active = 'reports', user }) {
   if (!user || user.role !== 'ADMIN') {
     return (
       <div className="site">
-        <Header user={user} />
-        <main className="content" style={{ padding: '40px 20px', maxWidth: '600px', margin: '0 auto' }}>
-          <Notice type="danger">
-            Acceso restringido: Solo cuentas con rol de administrador pueden acceder a este panel.
-          </Notice>
-          <div className="actions centered">
-            <button className="button primary" onClick={() => navigate('home')}>
-              Volver al inicio
-            </button>
+        <main className="content" style={{ padding: '60px 20px', maxWidth: '540px', margin: '40px auto', textAlign: 'center' }}>
+          <div style={{ background: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(239, 68, 68, 0.35)', borderRadius: '22px', padding: '38px 28px', boxShadow: '0 25px 60px rgba(0,0,0,0.8)' }}>
+            <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.4)', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: '24px' }}>
+              ⚠️
+            </div>
+            <h2 style={{ fontSize: '1.35rem', fontWeight: 800, margin: '0 0 10px', color: '#f8fafc' }}>
+              Acceso Restringido
+            </h2>
+            <p style={{ fontSize: '0.9rem', color: '#94a3b8', margin: '0 0 24px', lineHeight: 1.5 }}>
+              Solo cuentas con rol de directivo o administrador escolar pueden acceder a este panel.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button className="button primary full-width" onClick={() => promptAuth('login', 'admin')} style={{ padding: '13px', fontWeight: 700 }}>
+                🔐 Iniciar sesión como Administrador
+              </button>
+              <button className="button ghost full-width" onClick={() => navigate('home')} style={{ padding: '11px' }}>
+                Volver al inicio
+              </button>
+            </div>
           </div>
         </main>
       </div>
@@ -2056,12 +2068,19 @@ function AdminLayout({ children, active = 'reports', user }) {
             <Icon name="video" /> CCTV Matrix Live (Demo)
           </button>
           <button
+            className={active === 'cameras' ? 'active' : ''}
+            onClick={() => navigate('admin_cameras')}
+          >
+            <Icon name="camera" /> Cámaras Escolares
+          </button>
+          <button
             className={active === 'broadcast' ? 'active' : ''}
             onClick={() => navigate('cctv_broadcast')}
             style={{ color: '#38bdf8' }}
           >
             <Icon name="camera" /> 📱 Transmitir Celular
           </button>
+            <button className="button secondary small" onClick={() => navigate('admin_cameras')} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Icon name="camera" size={14} /> Gestionar Cámaras</button>
           <button
             className={active === 'recordings' ? 'active' : ''}
             onClick={() => navigate('admin_recordings')}
@@ -2480,7 +2499,7 @@ function ConnectPhoneModal({ isOpen, onClose, cameras, selectedCam, liveStatus, 
 /* =========================================================================
    COMPONENTE: TRANSMISOR CCTV MÓVIL (PANTALLA PARA EL CELULAR)
    ========================================================================= */
-function CCTVBroadcaster({ user: _user, lang = 'es' }) {
+function CCTVBroadcaster({ user }) {
   const [cameras, setCameras] = useState([])
   const [selectedCamId, setSelectedCamId] = useState('')
   const [facingMode, setFacingMode] = useState('environment') // 'environment' o 'user'
@@ -2493,6 +2512,8 @@ function CCTVBroadcaster({ user: _user, lang = 'es' }) {
   const [errorMsg, setErrorMsg] = useState('')
   const [successInfo, setSuccessInfo] = useState(null)
   const [torchOn, setTorchOn] = useState(false)
+  const [zoomLevel, setZoomLevel] = useState(1.0)
+  const [aspectMode, setAspectMode] = useState('portrait')
 
   const videoPreviewRef = useRef(null)
   const mediaRecorderRef = useRef(null)
@@ -2730,6 +2751,38 @@ function CCTVBroadcaster({ user: _user, lang = 'es' }) {
 
   const selectedCam = cameras.find(c => c.id === selectedCamId)
 
+  if (!user || user.role !== 'admin') {
+    return (
+      <div className="broadcaster-shell" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', padding: '20px' }}>
+        <div style={{ maxWidth: '440px', width: '100%', background: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '20px', padding: '28px', textAlign: 'center', boxShadow: '0 20px 50px rgba(0,0,0,0.6)' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '12px' }}>🔒</div>
+          <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#f8fafc', marginBottom: '8px' }}>
+            Acceso Directivo Requerido
+          </h2>
+          <p style={{ fontSize: '0.86rem', color: '#94a3b8', lineHeight: 1.5, marginBottom: '20px' }}>
+            Para vincular este dispositivo móvil y transmitir en vivo a las cámaras del circuito escolar, debes iniciar sesión con una cuenta institucional de directivo.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <button
+              className="button primary"
+              onClick={() => promptAuth('login')}
+              style={{ width: '100%', padding: '12px', justifyContent: 'center' }}
+            >
+              🔐 Iniciar Sesión de Administrador
+            </button>
+            <button
+              className="button ghost"
+              onClick={() => navigate('home')}
+              style={{ width: '100%', padding: '10px', justifyContent: 'center' }}
+            >
+              ← Volver al Inicio
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="broadcaster-shell">
       <div className="broadcaster-container">
@@ -2767,15 +2820,72 @@ function CCTVBroadcaster({ user: _user, lang = 'es' }) {
           </div>
         )}
 
+        {/* Barra de Controles Rápidos de Cámara (Zoom y Orientación) */}
+        <div className="broadcaster-quick-tools">
+          <div className="broadcaster-tool-group">
+            <span className="broadcaster-tool-label">🔍 Zoom:</span>
+            {[1, 1.5, 2, 3].map(z => (
+              <button
+                key={z}
+                type="button"
+                className={`broadcaster-zoom-chip ${zoomLevel === z ? 'active' : ''}`}
+                onClick={async () => {
+                  setZoomLevel(z)
+                  if (stream) {
+                    const track = stream.getVideoTracks()[0]
+                    if (track?.getCapabilities?.()?.zoom) {
+                      try {
+                        await track.applyConstraints({ advanced: [{ zoom: z }] })
+                      } catch (_e) {}
+                    }
+                  }
+                }}
+              >
+                {z}x
+              </button>
+            ))}
+          </div>
+
+          <div className="broadcaster-tool-group">
+            <span className="broadcaster-tool-label">📐 Modo:</span>
+            <button
+              type="button"
+              className={`broadcaster-zoom-chip ${aspectMode === 'landscape' ? 'active' : ''}`}
+              onClick={() => setAspectMode('landscape')}
+              title="Formato horizontal tipo monitor CCTV (16:9)"
+            >
+              🖥️ Horizontal
+            </button>
+            <button
+              type="button"
+              className={`broadcaster-zoom-chip ${aspectMode === 'portrait' ? 'active' : ''}`}
+              onClick={() => setAspectMode('portrait')}
+              title="Formato vertical tipo celular (9:16)"
+            >
+              📱 Vertical
+            </button>
+          </div>
+        </div>
+
         {/* Viewfinder con la cámara */}
-        <div className="broadcaster-viewfinder-card">
-          <video
-            ref={videoPreviewRef}
-            autoPlay
-            playsInline
-            muted
-            className="broadcaster-video-preview"
-          />
+        <div className={`broadcaster-viewfinder-card ${aspectMode === 'portrait' ? 'portrait-frame' : 'landscape-frame'}`}>
+          <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
+            <video
+              ref={videoPreviewRef}
+              autoPlay
+              playsInline
+              muted
+              className="broadcaster-video-preview"
+              style={{
+                transform: `scale(${zoomLevel})`,
+                transformOrigin: 'center center',
+                transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+              }}
+            />
+          </div>
 
           <div className="broadcaster-hud-corners" />
 
@@ -2786,7 +2896,7 @@ function CCTVBroadcaster({ user: _user, lang = 'es' }) {
           </div>
 
           <div style={{ position: 'absolute', bottom: '12px', left: '14px', zIndex: 10, fontSize: '0.78rem', color: '#fff', textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}>
-            <strong>{selectedCam?.label || 'CAM Prueba Cel 1'}</strong> · 720p 30fps
+            <strong>{selectedCam?.label || 'CAM Prueba Cel 1'}</strong> • {zoomLevel}x • {aspectMode === 'portrait' ? 'Vertical 9:16' : 'Horizontal 16:9'}
           </div>
         </div>
 
@@ -3329,8 +3439,325 @@ function AdminDashboard({ user }) {
   )
 }
 
+/* =========================================================================
+   COMPONENTE: GESTIÓN DE CÁMARAS ESCOLARES (ADMIN)
+   ========================================================================= */
+function AdminCameras({ user }) {
+  const [cameras, setCameras] = useState([])
+  const [busy, setBusy] = useState(true)
+  const [search, setSearch] = useState('')
+  const [editModal, setEditModal] = useState(false)
+  const [editingCam, setEditingCam] = useState(null)
+  const [createModal, setCreateModal] = useState(false)
+  const [editForm, setEditForm] = useState({ identifier: '', label: '', location: '' })
+  const [createForm, setCreateForm] = useState({ identifier: '', label: '', location: '' })
+  const [actionBusy, setActionBusy] = useState(false)
+  const [msg, setMsg] = useState({ type: '', text: '' })
+
+  const loadCameras = useCallback(async () => {
+    setBusy(true)
+    try {
+      const data = await apiRequest('/admin/cameras')
+      setCameras(data)
+    } catch (e) {
+      setMsg({ type: 'danger', text: e.message })
+    } finally {
+      setBusy(false)
+    }
+  }, [])
+
+  useEffect(() => { loadCameras() }, [loadCameras])
+
+  const openEdit = (cam) => {
+    setEditingCam(cam)
+    setEditForm({
+      identifier: cam.identifier,
+      label: cam.label,
+      location: cam.location,
+    })
+    setEditModal(true)
+  }
+
+  const handleSaveEdit = async (e) => {
+    e.preventDefault()
+    if (!editingCam) return
+    setActionBusy(true)
+    try {
+      await apiRequest(`/admin/cameras/${editingCam.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(editForm),
+      })
+      setMsg({ type: 'success', text: `Cámara "${editForm.label}" actualizada exitosamente.` })
+      setEditModal(false)
+      setEditingCam(null)
+      await loadCameras()
+    } catch (err) {
+      alert(`Error al actualizar cámara: ${err.message}`)
+    } finally {
+      setActionBusy(false)
+    }
+  }
+
+  const handleCreate = async (e) => {
+    e.preventDefault()
+    setActionBusy(true)
+    try {
+      await apiRequest('/admin/cameras', {
+        method: 'POST',
+        body: JSON.stringify(createForm),
+      })
+      setMsg({ type: 'success', text: `Cámara "${createForm.label}" creada exitosamente.` })
+      setCreateModal(false)
+      setCreateForm({ identifier: '', label: '', location: '' })
+      await loadCameras()
+    } catch (err) {
+      alert(`Error al registrar cámara: ${err.message}`)
+    } finally {
+      setActionBusy(false)
+    }
+  }
+
+  const handleDelete = async (camId) => {
+    if (!window.confirm('¿Seguro que deseas desactivar esta cámara escolar?')) return
+    try {
+      await apiRequest(`/admin/cameras/${camId}`, { method: 'DELETE' })
+      setMsg({ type: 'info', text: 'Cámara desactivada del sistema.' })
+      await loadCameras()
+    } catch (err) {
+      alert(`Error al desactivar cámara: ${err.message}`)
+    }
+  }
+
+  const filtered = cameras.filter(c => {
+    const q = search.toLowerCase()
+    return c.identifier.toLowerCase().includes(q) || c.label.toLowerCase().includes(q) || c.location.toLowerCase().includes(q)
+  })
+
+  return (
+    <AdminLayout active="cameras" user={user}>
+      <main className="admin-content" style={{ maxWidth: '1200px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+          <div>
+            <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800 }}>Gestión de Cámaras Institucionales</h1>
+            <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+              Personaliza los nombres de salones (ej. 301 a 3A), patios y zonas comunes para adaptar NEXIA a la estructura de tu colegio.
+            </p>
+          </div>
+          <button
+            className="button primary"
+            onClick={() => setCreateModal(true)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Icon name="camera" size={16} /> + Nueva Cámara Escolar
+          </button>
+        </div>
+
+        {msg.text && (
+          <Notice type={msg.type || 'info'}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>{msg.text}</span>
+              <button className="text-button" onClick={() => setMsg({ type: '', text: '' })}>✕</button>
+            </div>
+          </Notice>
+        )}
+
+        <div className="admin-card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+            <div style={{ position: 'relative', width: '320px', maxWidth: '100%' }}>
+              <input
+                type="text"
+                placeholder="Buscar por salón, identificador o piso..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                style={{ width: '100%', padding: '9px 12px', fontSize: '0.88rem' }}
+              />
+            </div>
+            <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+              Mostrando {filtered.length} de {cameras.length} cámaras activas
+            </span>
+          </div>
+
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Identificador</th>
+                  <th>Nombre / Salón Personalizado</th>
+                  <th>Ubicación / Piso</th>
+                  <th style={{ textAlign: 'right' }}>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {busy && (
+                  <tr>
+                    <td colSpan="4" style={{ textAlign: 'center', padding: '28px', color: 'var(--text-muted)' }}>
+                      Cargando catálogo de cámaras escolares...
+                    </td>
+                  </tr>
+                )}
+                {!busy && filtered.length === 0 && (
+                  <tr>
+                    <td colSpan="4" style={{ textAlign: 'center', padding: '28px', color: 'var(--text-muted)' }}>
+                      No se encontraron cámaras que coincidan con la búsqueda.
+                    </td>
+                  </tr>
+                )}
+                {!busy && filtered.map(c => (
+                  <tr key={c.id}>
+                    <td>
+                      <code style={{ background: 'rgba(56, 189, 248, 0.1)', color: 'var(--accent-cyan)', padding: '3px 8px', borderRadius: '4px', fontSize: '0.82rem' }}>
+                        {c.identifier}
+                      </code>
+                    </td>
+                    <td>
+                      <strong>{c.label}</strong>
+                    </td>
+                    <td style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>
+                      {c.location}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      <div style={{ display: 'inline-flex', gap: '8px' }}>
+                        <button
+                          className="button secondary small"
+                          onClick={() => openEdit(c)}
+                        >
+                          ✏️ Editar
+                        </button>
+                        <button
+                          className="button ghost small"
+                          onClick={() => navigate('cctv_broadcast', { camera_id: c.id })}
+                          title="Transmitir desde celular a esta cámara"
+                        >
+                          📱 Transmitir
+                        </button>
+                        <button
+                          className="button ghost small"
+                          onClick={() => handleDelete(c.id)}
+                          style={{ color: '#ef4444' }}
+                          title="Desactivar cámara institucional"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Modal Editar Cámara */}
+        {editModal && (
+          <div className="modal-overlay" onClick={() => !actionBusy && setEditModal(false)}>
+            <div className="modal-dialog" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+              <div className="modal-header">
+                <h3>Editar Nombre de Cámara</h3>
+                <button className="text-button" onClick={() => setEditModal(false)}>✕</button>
+              </div>
+              <form onSubmit={handleSaveEdit} style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '12px' }}>
+                <label>
+                  Identificador del Sistema (ej: CAM-3A, CAM-PATIO)
+                  <input
+                    type="text"
+                    required
+                    value={editForm.identifier}
+                    onChange={e => setEditForm({ ...editForm, identifier: e.target.value })}
+                  />
+                </label>
+                <label>
+                  Nombre / Salón visible (ej: Aula 3A, Laboratorio de Robótica)
+                  <input
+                    type="text"
+                    required
+                    value={editForm.label}
+                    onChange={e => setEditForm({ ...editForm, label: e.target.value })}
+                    placeholder="Ej. Aula 3A"
+                  />
+                </label>
+                <label>
+                  Piso o Zona Escolar
+                  <input
+                    type="text"
+                    required
+                    value={editForm.location}
+                    onChange={e => setEditForm({ ...editForm, location: e.target.value })}
+                    placeholder="Ej. Tercer piso - Bloque Central"
+                  />
+                </label>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+                  <button type="button" className="button ghost" onClick={() => setEditModal(false)} disabled={actionBusy}>
+                    Cancelar
+                  </button>
+                  <button type="submit" className="button primary" disabled={actionBusy}>
+                    {actionBusy ? 'Guardando…' : 'Guardar Cambios'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Crear Cámara */}
+        {createModal && (
+          <div className="modal-overlay" onClick={() => !actionBusy && setCreateModal(false)}>
+            <div className="modal-dialog" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+              <div className="modal-header">
+                <h3>Registrar Nueva Cámara Escolar</h3>
+                <button className="text-button" onClick={() => setCreateModal(false)}>✕</button>
+              </div>
+              <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '12px' }}>
+                <label>
+                  Identificador Único (ej: CAM-P4-01, CAM-CAFETERIA)
+                  <input
+                    type="text"
+                    required
+                    value={createForm.identifier}
+                    onChange={e => setCreateForm({ ...createForm, identifier: e.target.value })}
+                    placeholder="CAM-3A"
+                  />
+                </label>
+                <label>
+                  Nombre de la Cámara / Salón
+                  <input
+                    type="text"
+                    required
+                    value={createForm.label}
+                    onChange={e => setCreateForm({ ...createForm, label: e.target.value })}
+                    placeholder="Ej. Aula 3A Bachillerato"
+                  />
+                </label>
+                <label>
+                  Ubicación Escolar
+                  <input
+                    type="text"
+                    required
+                    value={createForm.location}
+                    onChange={e => setCreateForm({ ...createForm, location: e.target.value })}
+                    placeholder="Ej. Tercer piso"
+                  />
+                </label>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+                  <button type="button" className="button ghost" onClick={() => setCreateModal(false)} disabled={actionBusy}>
+                    Cancelar
+                  </button>
+                  <button type="submit" className="button primary" disabled={actionBusy}>
+                    {actionBusy ? 'Registrando…' : 'Crear Cámara'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </main>
+    </AdminLayout>
+  )
+}
+
 function AdminRecordings({ user }) {
   const [recordings, setRecordings] = useState([])
+  const [previewModal, setPreviewModal] = useState(false)
+  const [previewRec, setPreviewRec] = useState(null)
   const [cameras, setCameras] = useState([])
   const [busy, setBusy] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -3583,6 +4010,13 @@ function AdminRecordings({ user }) {
                         <td>{(r.size_bytes / (1024 * 1024)).toFixed(1)} MB</td>
                         <td>
                           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            <button
+                              className="button primary small"
+                              onClick={() => { setPreviewRec(r); setPreviewModal(true); }}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                            >
+                              <Icon name="video" size={13} /> Ver Grabación
+                            </button>
                             <button className="button secondary small" onClick={() => openEditModal(r)}>
                               Editar
                             </button>
@@ -3599,6 +4033,56 @@ function AdminRecordings({ user }) {
             )}
           </section>
         </div>
+
+        {/* Modal de Previsualización y Reproducción de Grabación Completa */}
+        {previewModal && previewRec && (
+          <div className="modal-overlay" onClick={() => setPreviewModal(false)}>
+            <div className="modal-dialog" onClick={e => e.stopPropagation()} style={{ maxWidth: '820px', width: '95vw', padding: '24px' }}>
+              <div className="modal-header">
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>Reproducción de Grabación Completa</h3>
+                  <small style={{ color: 'var(--accent-cyan)', fontWeight: 600 }}>
+                    {previewRec.camera_label} • {previewRec.original_name}
+                  </small>
+                </div>
+                <button className="auth-close-btn" onClick={() => setPreviewModal(false)} aria-label="Cerrar reproductor">
+                  <Icon name="close" size={18} />
+                </button>
+              </div>
+
+              <div style={{ marginTop: '16px', borderRadius: '14px', overflow: 'hidden', background: '#000', display: 'flex', justifyContent: 'center', border: '1px solid rgba(255, 255, 255, 0.1)', boxShadow: '0 15px 35px rgba(0,0,0,0.6)' }}>
+                <video
+                  src={`${API_BASE_URL.replace(/\/api\/?$/, '')}/api/recordings/${previewRec.id}/stream`}
+                  controls
+                  autoPlay
+                  playsInline
+                  style={{ width: '100%', maxHeight: '480px', objectFit: 'contain' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', flexWrap: 'wrap', gap: '10px' }}>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                  Inicio: <strong>{new Date(previewRec.recording_started_at).toLocaleString()}</strong> • Duración: <strong>{Math.floor(previewRec.duration_seconds / 60)}m {previewRec.duration_seconds % 60}s</strong> • Tamaño: <strong>{(previewRec.size_bytes / (1024 * 1024)).toFixed(1)} MB</strong>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <a
+                    href={`${API_BASE_URL.replace(/\/api\/?$/, '')}/api/recordings/${previewRec.id}/stream`}
+                    download={previewRec.original_name}
+                    className="button secondary small"
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    ⬇ Descargar Video
+                  </a>
+                  <button className="button ghost small" onClick={() => setPreviewModal(false)}>
+                    Cerrar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Modal de edición de grabación */}
         {editModal && editingRec && (
@@ -4033,7 +4517,62 @@ function AdminDetail({ reportId, user }) {
   const [_cameras, setCameras] = useState([])
   const [busy, setBusy] = useState(true)
   const [error, setError] = useState('')
+  const [onlyFragmentMode, setOnlyFragmentMode] = useState(true)
   const videoRef = useRef(null)
+
+  // Calcular lapso de tiempo exacto del incidente respecto al inicio del video
+  const fragmentWindow = useMemo(() => {
+    if (!report || !evidence) return null
+    const recStart = new Date(evidence.recording_started_at).getTime()
+    if (isNaN(recStart)) return null
+
+    const repDateStr = report.incident_date
+    const startParts = (report.approximate_time_start || '00:00:00').split(':')
+    const endParts = (report.approximate_time_end || '23:59:59').split(':')
+
+    const repStartDate = new Date(`${repDateStr}T${startParts[0].padStart(2, '0')}:${startParts[1].padStart(2, '0')}:${(startParts[2] || '00').slice(0, 2)}`).getTime()
+    const repEndDate = new Date(`${repDateStr}T${endParts[0].padStart(2, '0')}:${endParts[1].padStart(2, '0')}:${(endParts[2] || '00').slice(0, 2)}`).getTime()
+
+    let secStart = Math.floor((repStartDate - recStart) / 1000)
+    let secEnd = Math.floor((repEndDate - recStart) / 1000)
+
+    const dur = evidence.duration_seconds || 3600
+    if (secStart > dur || secEnd < 0) {
+      for (const offsetH of [-5, -4, -6, 5]) {
+        const adjStart = secStart + (offsetH * 3600)
+        const adjEnd = secEnd + (offsetH * 3600)
+        if (adjStart >= 0 && adjStart <= dur) {
+          secStart = adjStart
+          secEnd = adjEnd
+          break
+        }
+      }
+    }
+
+    const clampedStart = Math.max(0, Math.min(dur, secStart))
+    const clampedEnd = Math.max(clampedStart + 5, Math.min(dur, secEnd))
+
+    return {
+      start: clampedStart,
+      end: clampedEnd,
+      duration: clampedEnd - clampedStart,
+      timeRangeStr: `${report.approximate_time_start?.slice(0, 5)} - ${report.approximate_time_end?.slice(0, 5)}`,
+    }
+  }, [report, evidence])
+
+  const handleTimeUpdate = () => {
+    if (!videoRef.current || !onlyFragmentMode || !fragmentWindow) return
+    const curr = videoRef.current.currentTime
+    if (curr >= fragmentWindow.end || curr < fragmentWindow.start) {
+      videoRef.current.currentTime = fragmentWindow.start
+    }
+  }
+
+  const handleLoadedMetadata = () => {
+    if (videoRef.current && onlyFragmentMode && fragmentWindow) {
+      videoRef.current.currentTime = fragmentWindow.start
+    }
+  }
 
   const load = useCallback(async () => {
     try {
@@ -4185,6 +4724,31 @@ function AdminDetail({ reportId, user }) {
               </div>
             </div>
 
+            {/* Selector de Modo de Reproducción: Fragmento Exclusivo vs Video Completo */}
+            {fragmentWindow && (
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className={`button ${onlyFragmentMode ? 'primary' : 'ghost'} small`}
+                  onClick={() => {
+                    setOnlyFragmentMode(true)
+                    if (videoRef.current) videoRef.current.currentTime = fragmentWindow.start
+                  }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <span>⏱️</span>
+                  <span>Solo lapso reportado ({fragmentWindow.timeRangeStr})</span>
+                </button>
+                <button
+                  type="button"
+                  className={`button ${!onlyFragmentMode ? 'secondary' : 'ghost'} small`}
+                  onClick={() => setOnlyFragmentMode(false)}
+                >
+                  Ver grabación completa ({Math.floor((evidence?.duration_seconds || 0) / 60)} min)
+                </button>
+              </div>
+            )}
+
             <div className="evidence-video-container">
               {evidence?.stream_url ? (
                 <video
@@ -4193,6 +4757,8 @@ function AdminDetail({ reportId, user }) {
                   src={evidence.stream_url.startsWith('http') ? evidence.stream_url : `${API_BASE_URL.replace(/\/api\/?$/, '')}${evidence.stream_url}`}
                   controls
                   playsInline
+                  onTimeUpdate={handleTimeUpdate}
+                  onLoadedMetadata={handleLoadedMetadata}
                   className="evidence-video-player"
                 />
               ) : (
@@ -4292,11 +4858,56 @@ function AdminDetail({ reportId, user }) {
 
             {analysis && analysis.summary && (
               <section className="admin-card">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <h3>Veredicto de NEXIA</h3>
-                  <span className={`badge ${analysis.confidence_level === 'HIGH' ? 'success' : 'warning'}`}>
-                    Confianza {analysis.confidence_level === 'HIGH' ? 'Alta' : 'Media'}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                  <h3 style={{ margin: 0 }}>Veredicto de NEXIA</h3>
+                  <span className={`badge ${
+                    analysis.confidence_level === 'HIGH'
+                      ? 'success'
+                      : analysis.confidence_level === 'LOW'
+                        ? 'danger'
+                        : 'warning'
+                  }`} style={{ padding: '6px 12px', fontSize: '0.84rem', fontWeight: 700 }}>
+                    {analysis.confidence_level === 'HIGH'
+                      ? '🟢 Alta fidelidad'
+                      : analysis.confidence_level === 'LOW'
+                        ? '🔴 Baja fidelidad'
+                        : '🟡 Media fidelidad'}
                   </span>
+                </div>
+
+                {/* Alerta y recomendación de fidelidad de Gemini */}
+                <div style={{
+                  padding: '14px 16px',
+                  borderRadius: '12px',
+                  marginBottom: '16px',
+                  background: analysis.confidence_level === 'LOW'
+                    ? 'rgba(239, 68, 68, 0.12)'
+                    : analysis.confidence_level === 'HIGH'
+                      ? 'rgba(16, 185, 129, 0.1)'
+                      : 'rgba(245, 158, 11, 0.1)',
+                  border: `1px solid ${
+                    analysis.confidence_level === 'LOW'
+                      ? 'rgba(239, 68, 68, 0.4)'
+                      : analysis.confidence_level === 'HIGH'
+                        ? 'rgba(16, 185, 129, 0.3)'
+                        : 'rgba(245, 158, 11, 0.3)'
+                  }`,
+                }}>
+                  <strong style={{
+                    display: 'block',
+                    marginBottom: '4px',
+                    fontSize: '0.85rem',
+                    color: analysis.confidence_level === 'LOW' ? '#ef4444' : 'var(--accent-cyan)'
+                  }}>
+                    {analysis.confidence_level === 'LOW'
+                      ? '⚠️ ALERTA DE REVISIÓN VISUAL:'
+                      : 'Orientación Institucional (Ley 1620):'}
+                  </strong>
+                  <p style={{ margin: 0, fontSize: '0.85rem', lineHeight: 1.5, color: '#f8fafc' }}>
+                    {analysis.recommendation || (analysis.confidence_level === 'LOW'
+                      ? 'Por limitaciones de ángulo o iluminación en el fragmento de la cámara, te recomendamos inspeccionar el video manualmente por tu propia cuenta para comprobar nuestro veredicto antes de emitir cualquier decisión.'
+                      : 'Los patrones observables se ajustan a las evidencias. Se recomienda proceder con los protocolos formativos correspondientes.')}
+                  </p>
                 </div>
 
                 <div style={{ background: 'var(--bg-surface-elevated)', padding: '16px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', marginBottom: '16px' }}>
@@ -4454,6 +5065,7 @@ function App() {
       {route.page === 'admin' && <AdminDashboard user={currentUser} />}
       {route.page === 'admin_cctv' && <AdminLiveCCTV user={currentUser} lang={lang} />}
       {route.page === 'cctv_broadcast' && <CCTVBroadcaster user={currentUser} lang={lang} />}
+      {route.page === 'admin_cameras' && <AdminCameras user={currentUser} />}
       {route.page === 'admin_recordings' && <AdminRecordings user={currentUser} />}
       {route.page === 'admin_users' && <AdminUsers user={currentUser} />}
       {route.page === 'admin_appeals' && <AdminAppeals user={currentUser} />}

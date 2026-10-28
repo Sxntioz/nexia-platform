@@ -62,19 +62,33 @@ async def lifespan(_: FastAPI):
                 db.add_all(new_cameras)
                 db.commit()
 
+            # Asegurar columna recommendation en analysis_results si no existe
+            try:
+                from sqlalchemy import text
+                db.execute(text("ALTER TABLE analysis_results ADD COLUMN recommendation TEXT"))
+                db.commit()
+            except Exception:
+                db.rollback()
+
             # Asegurar cámara de prueba en vivo para celular
             cam_cel = db.query(Camera).filter(Camera.identifier == "CAM-CEL-1").first()
             if not cam_cel:
                 db.add(Camera(identifier="CAM-CEL-1", label="CAM Prueba Cel 1", location="CAM Prueba Cel 1"))
                 db.commit()
 
-            # Asegurar usuario administrador por defecto
-            admin_user = db.query(User).filter(User.role == UserRole.ADMIN).first()
+            # Asegurar usuario administrador por defecto con credenciales actualizadas
+            admin_user = db.query(User).filter(User.email == "admin@nexia.edu.co").first()
             if not admin_user:
+                admin_user = db.query(User).filter(User.role == UserRole.ADMIN).first()
+            if admin_user:
+                admin_user.password_hash = hash_password("Nexia2026*Protegida!")
+                admin_user.email = "admin@nexia.edu.co"
+                db.commit()
+            else:
                 default_admin = User(
                     full_name="Administrador Nexia",
                     email="admin@nexia.edu.co",
-                    password_hash=hash_password("admin123"),
+                    password_hash=hash_password("Nexia2026*Protegida!"),
                     institution_relation="Acudiente",
                     role=UserRole.ADMIN,
                 )

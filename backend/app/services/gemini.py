@@ -203,7 +203,16 @@ INSTRUCCIONES CLAVE DE ANÁLISIS:
 3. Si los estudiantes están sentados, en calma, en clase o conversando pacíficamente sin incidentes, indícalo con total objetividad (event_match: "NOT_OBSERVED").
 4. Si se confirma una conducta anómala o coincidente, indica event_match ("CONFIRMED" o "SUSPICIOUS") y detalla lo que se observa objetivamente.
 5. No identifiques personas ni reveles identidades sensibles. Describe únicamente movimientos físicos observables.
-6. En relevant_moments, devuelve los momentos visualmente importantes con los segundos desde el inicio de este fragmento."""
+6. En relevant_moments, devuelve los momentos visualmente importantes con los segundos desde el inicio de este fragmento.
+7. EVALUACIÓN DE FIDELIDAD VISUAL Y RECOMENDACIÓN INSTITUCIONAL:
+- En "confidence_level", clasifica la fidelidad visual:
+  * "HIGH" (Alta fidelidad): el fragmento tiene visibilidad diáfana, resolución suficiente e iluminación adecuada para discernir con claridad las acciones.
+  * "MEDIUM" (Media fidelidad): visibilidad aceptable pero con ángulo parcial, oclusiones temporales o distancia intermedia.
+  * "LOW" (Baja fidelidad): ángulo lejano, contraluz, sombras, desenfoque o resolución que dificultan tener certeza absoluta.
+- En "recommendation":
+  * Si la fidelidad es "LOW": emite obligatoriamente una advertencia y recomendación orientando a los directivos escolares a inspeccionar manualmente el video por cuenta propia para corroborar el veredicto antes de cualquier decisión disciplinaria.
+  * Si es "MEDIUM" o "HIGH": provee recomendaciones orientadoras pedagógicas o restaurativas según los protocolos escolares.
+"""
 
             config = types.GenerateContentConfig(
                 response_mime_type="application/json",
@@ -254,6 +263,16 @@ INSTRUCCIONES CLAVE DE ANÁLISIS:
                 m_dict["timestamp_seconds"] = min(clip.duration_seconds, clip_offset + item.timestamp_seconds)
                 adjusted_moments.append(m_dict)
 
+            # Si Gemini no devolvió recommendation, asignar una coherente según el nivel de fidelidad
+            rec_text = getattr(parsed, "recommendation", None)
+            if not rec_text or len(rec_text.strip()) < 5:
+                if parsed.confidence_level == "LOW":
+                    rec_text = "⚠️ Baja fidelidad visual detectada en el fragmento. La IA recomienda expresamente a la coordinación y directivos escolares inspeccionar la grabación de video de forma manual para verificar el veredicto por cuenta propia antes de emitir cualquier sanción o medida disciplinaria."
+                elif parsed.confidence_level == "MEDIUM":
+                    rec_text = "ℹ️ Fidelidad media: Existen indicios visuales concordantes, pero se aconseja contrastar con versiones testimoniales de los involucrados en el marco del debido proceso."
+                else:
+                    rec_text = "✅ Alta fidelidad: Los patrones visuales y evidencias en el rango temporal reportado son nítidos. Se sugiere proceder con los protocolos pedagógicos y restaurativos institucionales."
+
             result = AnalysisResult(
                 job_id=job.id,
                 temporal_match=temporal,
@@ -262,6 +281,7 @@ INSTRUCCIONES CLAVE DE ANÁLISIS:
                 suggested_type=parsed.suggested_type,
                 summary=parsed.summary,
                 confidence_level=parsed.confidence_level,
+                recommendation=rec_text,
                 relevant_moments_json=json.dumps(adjusted_moments),
             )
             db.add(result)

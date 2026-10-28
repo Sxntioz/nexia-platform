@@ -165,6 +165,19 @@ class CameraResponse(BaseModel):
     location: str
 
 
+class CameraUpdateRequest(BaseModel):
+    identifier: str | None = Field(default=None, max_length=30)
+    label: str | None = Field(default=None, max_length=80)
+    location: str | None = Field(default=None, max_length=160)
+    is_active: bool | None = None
+
+
+class CameraCreateRequest(BaseModel):
+    identifier: str = Field(min_length=2, max_length=30)
+    label: str = Field(min_length=2, max_length=80)
+    location: str = Field(min_length=2, max_length=160)
+
+
 class RecordingResponse(BaseModel):
     id: str
     camera_id: str
@@ -235,6 +248,7 @@ class GeminiAnalysis(BaseModel):
     suggested_type: str | None = Field(default=None, max_length=80)
     summary: str = Field(min_length=10, max_length=1200)
     confidence_level: Literal["HIGH", "MEDIUM", "LOW"]
+    recommendation: str | None = Field(default=None, max_length=600)
     relevant_moments: list[RelevantMoment] = Field(default_factory=list, max_length=8)
 
 
@@ -253,6 +267,7 @@ class AnalysisResponse(BaseModel):
     suggested_type: str | None = None
     summary: str | None = None
     confidence_level: str | None = None
+    recommendation: str | None = None
     relevant_moments: list[RelevantMoment] = Field(default_factory=list)
 
 

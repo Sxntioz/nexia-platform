@@ -46,7 +46,9 @@ from app.schemas.reports import (
     AnalysisResponse,
     AppealCreate,
     AppealResponse,
+    CameraCreateRequest,
     CameraResponse,
+    CameraUpdateRequest,
     ChatRequest,
     ChatResponse,
     CompleteUploadRequest,
@@ -386,6 +388,75 @@ def list_cameras(
     db: Session = Depends(get_db),
 ) -> list[Camera]:
     return list(db.scalars(select(Camera).where(Camera.is_active.is_(True)).order_by(Camera.identifier)).all())
+
+
+@api_router.post("/admin/cameras", response_model=CameraResponse, status_code=201, tags=["admin"])
+def create_camera(
+    payload: CameraCreateRequest,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> Camera:
+    existing = db.scalar(select(Camera).where(Camera.identifier == payload.identifier.strip()))
+    if existing:
+        if not existing.is_active:
+            existing.is_active = True
+            existing.label = payload.label.strip()
+            existing.location = payload.location.strip()
+            db.commit()
+            db.refresh(existing)
+            return existing
+        raise HTTPException(status_code=400, detail="Ya existe una cámara con ese identificador")
+    camera = Camera(
+        identifier=payload.identifier.strip(),
+        label=payload.label.strip(),
+        location=payload.location.strip(),
+        is_active=True,
+    )
+    db.add(camera)
+    db.commit()
+    db.refresh(camera)
+    return camera
+
+
+@api_router.patch("/admin/cameras/{camera_id}", response_model=CameraResponse, tags=["admin"])
+def update_camera(
+    camera_id: str,
+    payload: CameraUpdateRequest,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> Camera:
+    camera = db.get(Camera, camera_id)
+    if not camera:
+        raise HTTPException(status_code=404, detail="Cámara no encontrada")
+    if payload.identifier is not None and payload.identifier.strip():
+        new_ident = payload.identifier.strip()
+        existing = db.scalar(select(Camera).where(Camera.identifier == new_ident, Camera.id != camera_id))
+        if existing:
+            raise HTTPException(status_code=400, detail="Ya existe otra cámara con ese identificador")
+        camera.identifier = new_ident
+    if payload.label is not None and payload.label.strip():
+        camera.label = payload.label.strip()
+    if payload.location is not None and payload.location.strip():
+        camera.location = payload.location.strip()
+    if payload.is_active is not None:
+        camera.is_active = payload.is_active
+    db.commit()
+    db.refresh(camera)
+    return camera
+
+
+@api_router.delete("/admin/cameras/{camera_id}", response_model=MessageResponse, tags=["admin"])
+def delete_camera(
+    camera_id: str,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> MessageResponse:
+    camera = db.get(Camera, camera_id)
+    if not camera:
+        raise HTTPException(status_code=404, detail="Cámara no encontrada")
+    camera.is_active = False
+    db.commit()
+    return MessageResponse(message="Cámara desactivada exitosamente")
 
 
 

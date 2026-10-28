@@ -53,7 +53,7 @@ def admin_headers(client):
         "/api/auth/login",
         json={
             "email": "admin@nexia.edu.co",
-            "password": "admin123",
+            "password": "Nexia2026*Protegida!",
         },
     )
     token = res.json()["access_token"]

@@ -183,6 +183,7 @@ class AnalysisResult(Base):
     suggested_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
     summary: Mapped[str] = mapped_column(Text)
     confidence_level: Mapped[str] = mapped_column(String(24))
+    recommendation: Mapped[str | None] = mapped_column(Text, nullable=True)
     relevant_moments_json: Mapped[str] = mapped_column(Text, default="[]")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 

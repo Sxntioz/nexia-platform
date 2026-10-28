@@ -1977,35 +1977,47 @@ tr:hover td { background: var(--bg-surface-elevated); }
 .telemetry-pill {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 14px;
-  border-radius: 20px;
-  background: rgba(16, 185, 129, 0.12);
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.25);
   color: var(--success);
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   font-weight: 700;
   font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.04em;
+  user-select: none;
+  cursor: default;
 }
 
 .telemetry-chips {
   display: flex;
-  gap: 8px;
+  gap: 14px;
   flex-wrap: wrap;
   justify-content: flex-end;
+  align-items: center;
 }
 
 .telemetry-chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
-  border-radius: var(--radius-sm);
-  background: var(--bg-surface-elevated);
-  border: 1px solid var(--border);
+  gap: 5px;
+  padding: 0;
+  background: transparent;
+  border: none;
   color: var(--text-muted);
   font-size: 0.75rem;
   font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.02em;
+  user-select: none;
+  cursor: default;
+}
+
+.telemetry-chip + .telemetry-chip::before {
+  content: "•";
+  color: rgba(255, 255, 255, 0.2);
+  margin-right: 8px;
 }
 
 /* App Action Grid */
@@ -3794,4 +3806,327 @@ tr:hover td { background: var(--bg-surface-elevated); }
   display: block;
   width: 180px;
   height: 180px;
+}
+
+
+/* --- Mobile Menu Close Button --- */
+.mobile-close-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #94a3b8;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 0;
+  margin: 0;
+  outline: none;
+  font-size: 1rem;
+}
+
+.mobile-close-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #ef4444;
+  transform: rotate(90deg) scale(1.08);
+}
+
+/* --- Broadcaster Mobile Controls: Zoom & Orientation --- */
+.broadcaster-quick-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+
+.broadcaster-tools-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.broadcaster-tool-label {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+}
+
+.broadcaster-zoom-group {
+  display: flex;
+  gap: 6px;
+}
+
+.broadcaster-zoom-chip {
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #94a3b8;
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-family: monospace;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.broadcaster-zoom-chip.active {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.orientation-toggle-btn {
+  padding: 5px 12px;
+  border-radius: 8px;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #cbd5e1;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.orientation-toggle-btn:hover {
+  background: rgba(51, 65, 85, 0.9);
+  color: #fff;
+}
+
+.portrait-frame {
+  max-width: 360px !important;
+  margin: 0 auto;
+  aspect-ratio: 9 / 16 !important;
+}
+
+.landscape-frame {
+  max-width: 100% !important;
+  aspect-ratio: 16 / 9 !important;
+}
+
+/* --- Admin Cameras Management --- */
+.cameras-admin-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.cameras-admin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.camera-admin-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: border-color 0.2s ease;
+}
+
+.camera-admin-card:hover {
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.camera-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.camera-card-badge {
+  font-family: monospace;
+  font-size: 0.72rem;
+  background: rgba(56, 189, 248, 0.12);
+  color: var(--accent-cyan);
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.camera-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.camera-form-field label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.camera-form-field input,
+.camera-form-field select {
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-main);
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  outline: none;
+}
+
+.camera-form-field input:focus,
+.camera-form-field select:focus {
+  border-color: var(--accent-cyan);
+}
+
+.camera-actions-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* --- Video Preview Modal --- */
+.preview-modal-dialog {
+  max-width: 800px !important;
+  width: 90% !important;
+  background: rgba(10, 15, 29, 0.98) !important;
+  border: 1px solid rgba(56, 189, 248, 0.3) !important;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8) !important;
+  border-radius: 18px !important;
+  padding: 24px !important;
+}
+
+.preview-video-container {
+  border-radius: 12px;
+  overflow: hidden;
+  background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: 14px;
+}
+
+.preview-video-container video {
+  width: 100%;
+  max-height: 480px;
+  display: block;
+}
+
+/* --- AI Fidelity Alert & Fragment Scoping --- */
+.fidelity-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.fidelity-badge.fidelity-high {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #10b981;
+}
+
+.fidelity-badge.fidelity-medium {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #f59e0b;
+}
+
+.fidelity-badge.fidelity-low {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #ef4444;
+}
+
+.fidelity-alert-box {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin: 14px 0;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  color: #fca5a5;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.evidence-fragment-banner {
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.fragment-toggle-btn {
+  background: rgba(56, 189, 248, 0.2);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  color: var(--accent-cyan);
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.fragment-toggle-btn:hover {
+  background: rgba(56, 189, 248, 0.35);
+}
+
+/* --- Responsive Table & Container Adjustments --- */
+.data-table-container,
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 768px) {
+  .cameras-admin-grid {
+    grid-template-columns: 1fr;
+  }
+  .preview-modal-dialog {
+    width: 96% !important;
+    padding: 16px !important;
+  }
+  .broadcaster-telemetry-grid {
+    grid-template-columns: repeat(3, 1fr);
+    padding: 8px;
+    gap: 4px;
+  }
+  .broadcaster-telemetry-grid .stat-value {
+    font-size: 0.95rem;
+  }
+  .admin-tabs {
+    overflow-x: auto;
+    white-space: nowrap;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .admin-tab-btn {
+    flex-shrink: 0;
+  }
 }
