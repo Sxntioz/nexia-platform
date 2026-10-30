@@ -317,3 +317,86 @@ INSTRUCCIONES CLAVE DE ANÁLISIS:
                 except Exception:
                     pass
 
+
+def analyze_live_stream_snippet(video_path: Path, camera_label: str, location: str) -> dict:
+    """
+    Analiza de forma autónoma y continua un fragmento de video en vivo para detectar
+    situaciones de riesgo o conflicto escolar en tiempo real sin esperar reporte manual.
+    """
+    if not settings.gemini_api_key or not video_path.is_file() or video_path.stat().st_size < 1024:
+        return {"incident_detected": False, "status": "NO_MEDIA"}
+
+    client = genai.Client(api_key=settings.gemini_api_key)
+    uploaded = None
+    try:
+        uploaded = client.files.upload(file=str(video_path))
+        deadline = time.monotonic() + 45
+        while not getattr(uploaded, "state", None) or getattr(uploaded.state, "name", "") == "PROCESSING":
+            if time.monotonic() >= deadline:
+                break
+            time.sleep(1.5)
+            uploaded = client.files.get(name=uploaded.name)
+
+        prompt = f"""Eres el Centinela Autónomo de Convivencia Escolar de NEXIA para colegios e instituciones educativas en Colombia (Ley 1620).
+Estás monitoreando en tiempo real la cámara: "{camera_label}" (Ubicación: "{location}").
+
+Analiza este fragmento de video en directo. Determina si ocurre alguna situación anómala o conducta de riesgo:
+1. Agresión física, riña, golpes, forcejeos o empujones violentos.
+2. Acoso escolar sistemático, intimidación o humillación observable.
+3. Sustracción no autorizada de pertenencias o hurto.
+4. Manipulación o porte de objetos peligrosos o prohibidos.
+5. Vandalismo o daño deliberado a las instalaciones del colegio.
+6. Emergencia física o caída aparatosa.
+
+Si todo transcurre con normalidad (estudiantes en clase, caminando, charlando pacíficamente, aula vacía o tranquila):
+Devuelve exactamente:
+{{
+  "incident_detected": false,
+  "incident_type": "NORMAL",
+  "severity": "NINGUNA",
+  "title": "Convivencia Pacífica",
+  "description": "No se aprecian anomalías en la cámara.",
+  "confidence": "Alta fidelidad",
+  "suggested_action": "Continuar monitoreo habitual."
+}}
+
+Si DETECTAS un incidente real o situación de alerta:
+Devuelve:
+{{
+  "incident_detected": true,
+  "incident_type": "FIGHT",
+  "severity": "ALTA",
+  "title": "Título corto y claro del hecho (ej. Riña entre estudiantes en aula)",
+  "description": "Descripción objetiva de las acciones físicas observadas sin revelar nombres personales",
+  "confidence": "Alta fidelidad",
+  "suggested_action": "Acción inmediata recomendada para el directivo conforme a la Ley 1620"
+}}
+Nota: "incident_type" debe ser uno de: "FIGHT", "THEFT", "BULLYING", "MISCONDUCT", "EMERGENCY".
+"severity" debe ser uno de: "ALTA", "MEDIA", "BAJA".
+"confidence" debe ser uno de: "Alta fidelidad", "Media fidelidad", "Baja fidelidad".
+"""
+        config = types.GenerateContentConfig(
+            response_mime_type="application/json",
+            temperature=0.1,
+        )
+
+        model_name = settings.gemini_model or "gemini-3.5-flash"
+        response = client.models.generate_content(
+            model=model_name,
+            contents=[uploaded, prompt],
+            config=config,
+        )
+
+        text = response.text or "{}"
+        data = json.loads(text)
+        return data
+    except Exception as e:
+        logger.warning(f"Aviso en análisis autónomo de fragmento en vivo: {e}")
+        return {"incident_detected": False, "status": "ERROR", "error": str(e)[:100]}
+    finally:
+        if uploaded is not None:
+            try:
+                client.files.delete(name=uploaded.name)
+            except Exception:
+                pass
+

@@ -201,3 +201,23 @@ class AdminDecision(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     result: Mapped[AnalysisResult] = relationship(back_populates="decision")
+
+
+class CCTVLiveAlert(Base):
+    __tablename__ = "cctv_live_alerts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    session_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    camera_id: Mapped[str] = mapped_column(ForeignKey("cameras.id", ondelete="CASCADE"), index=True)
+    camera_label: Mapped[str] = mapped_column(String(100))
+    incident_type: Mapped[str] = mapped_column(String(60), index=True)
+    severity: Mapped[str] = mapped_column(String(20), default="MEDIA")
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text)
+    confidence: Mapped[str] = mapped_column(String(40), default="Alta fidelidad")
+    suggested_action: Mapped[str | None] = mapped_column(Text, nullable=True)
+    whatsapp_notified: Mapped[bool] = mapped_column(Boolean, default=False)
+    whatsapp_recipient: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    camera: Mapped[Camera] = relationship()

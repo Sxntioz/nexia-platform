@@ -16,10 +16,11 @@ from app.models.base import (
     Appeal,
     AppealStatus,
     CameraRecording,
+    CCTVLiveAlert,
 )
 
 __all__ = [
     "AdminDecision", "AnalysisJob", "AnalysisResult", "Base", "Camera",
     "DecisionType", "EvidenceClip", "JobStatus", "Report", "ReportStatus",
-    "User", "UserRole", "Appeal", "AppealStatus", "CameraRecording",
+    "User", "UserRole", "Appeal", "AppealStatus", "CameraRecording", "CCTVLiveAlert",
 ]

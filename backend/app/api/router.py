@@ -1267,7 +1267,153 @@ class WebRTCSignalingManager:
                     except Exception:
                         pass
 
+    async def broadcast_to_room(self, room_id: str, message: dict):
+        targets = []
+        if room_id in self.rooms:
+            targets.extend(self.rooms[room_id])
+        if "global" in self.rooms:
+            targets.extend(self.rooms["global"])
+        for connection in targets:
+            try:
+                await connection.send_json(message)
+            except Exception:
+                pass
+
 webrtc_manager = WebRTCSignalingManager()
+
+# --- CONFIGURACIÓN DE ALERTAS WHATSAPP Y CENTINELA IA ---
+_whatsapp_config = {
+    "phone_number": "+573105551234",
+    "auto_notify_alerts": True,
+    "coordinator_name": "Coordinador de Convivencia",
+}
+
+TYPE_ALERT_LABELS = {
+    "FIGHT": "Riña o Agresión Física",
+    "THEFT": "Hurto o Sustracción",
+    "BULLYING": "Acoso Escolar / Intimidación",
+    "MISCONDUCT": "Falta a la Convivencia Escolar",
+    "EMERGENCY": "Emergencia Médica / Caída",
+}
+
+def format_whatsapp_alert_message(
+    camera_label: str,
+    location: str,
+    incident_type: str,
+    title: str,
+    description: str,
+    confidence: str,
+    suggested_action: str | None = None,
+    phone_number: str = "+573105551234"
+) -> tuple[str, str]:
+    now = datetime.now()
+    tipo_str = TYPE_ALERT_LABELS.get(incident_type, incident_type)
+    msg = (
+        "🚨 *ALERTA EN VIVO — SISTEMA NEXIA IA* 🚨\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📅 *Fecha:* {now.strftime('%d/%m/%Y')}\n"
+        f"⏰ *Hora:* {now.strftime('%I:%M:%S %p')}\n"
+        f"📍 *Lugar / Cámara:* {camera_label} ({location})\n"
+        f"⚠️ *Hecho Detectado:* {tipo_str} — {title}\n"
+        f"🔍 *Fidelidad IA:* {confidence}\n\n"
+        f"📝 *Detalle:* {description}\n\n"
+        f"📋 *Recomendación Ley 1620:* {suggested_action or 'Verificar de inmediato en el aula y aplicar protocolo de mediación escolar.'}\n\n"
+        "🔗 *Ver Circuito CCTV en Vivo:*\n"
+        "https://nexia-platform.vercel.app/#admin_cctv\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "_Notificación institucional generada automáticamente por Motor NEXIA Vision IA_"
+    )
+    phone_clean = re.sub(r"[^\d+]", "", phone_number)
+    if not phone_clean.startswith("+"):
+        phone_clean = f"+{phone_clean}" if phone_clean else "+573000000000"
+    encoded = urllib.parse.quote(msg)
+    link = f"https://wa.me/{phone_clean.replace('+', '')}?text={encoded}"
+    return msg, link
+
+def run_continuous_audit_task(session_id: str, camera_id: str, camera_label: str, stored_name: str):
+    try:
+        from app.services.gemini import analyze_live_stream_snippet
+        from app.db.session import get_session_factory
+        from app.models import CCTVLiveAlert, Camera
+        video_path = settings.upload_dir / stored_name
+        if not video_path.is_file() or video_path.stat().st_size < 10000:
+            return
+
+        with get_session_factory()() as db:
+            cam = db.get(Camera, camera_id)
+            location = cam.location if cam else camera_label
+
+        res = analyze_live_stream_snippet(video_path, camera_label, location)
+        if res.get("incident_detected"):
+            incident_type = res.get("incident_type", "FIGHT")
+            title = res.get("title", "Incidente Detectado por IA")
+            description = res.get("description", "Conducta atípica detectada en cámara escolar.")
+            severity = res.get("severity", "ALTA")
+            confidence = res.get("confidence", "Alta fidelidad")
+            action = res.get("suggested_action", "Verificar de inmediato en el aula.")
+
+            phone = _whatsapp_config.get("phone_number", "+573105551234")
+            _, wa_link = format_whatsapp_alert_message(
+                camera_label=camera_label,
+                location=location,
+                incident_type=incident_type,
+                title=title,
+                description=description,
+                confidence=confidence,
+                suggested_action=action,
+                phone_number=phone,
+            )
+
+            with get_session_factory()() as db:
+                alert = CCTVLiveAlert(
+                    session_id=session_id,
+                    camera_id=camera_id,
+                    camera_label=camera_label,
+                    incident_type=incident_type,
+                    severity=severity,
+                    title=title,
+                    description=description,
+                    confidence=confidence,
+                    suggested_action=action,
+                    whatsapp_notified=_whatsapp_config.get("auto_notify_alerts", True),
+                    whatsapp_recipient=phone,
+                )
+                db.add(alert)
+                db.commit()
+                db.refresh(alert)
+                alert_id = alert.id
+
+            alert_payload = {
+                "type": "live_ai_alert",
+                "alert": {
+                    "id": alert_id,
+                    "session_id": session_id,
+                    "camera_id": camera_id,
+                    "camera_label": camera_label,
+                    "incident_type": incident_type,
+                    "severity": severity,
+                    "title": title,
+                    "description": description,
+                    "confidence": confidence,
+                    "suggested_action": action,
+                    "whatsapp_notified": True,
+                    "whatsapp_recipient": phone,
+                    "whatsapp_link": wa_link,
+                    "created_at": datetime.now().isoformat(),
+                }
+            }
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.create_task(webrtc_manager.broadcast_to_room(camera_id, alert_payload))
+                else:
+                    asyncio.run(webrtc_manager.broadcast_to_room(camera_id, alert_payload))
+            except Exception:
+                pass
+    except Exception as e:
+        print("Error en auditoría continua de IA:", e)
+
 
 
 @api_router.get("/cctv/live-status", tags=["cctv-live"])
@@ -1381,6 +1527,7 @@ def start_broadcast(
 async def upload_broadcast_chunk(
     session_id: str = Query(...),
     chunk: UploadFile = File(...),
+    background: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db),
 ):
     session = _active_broadcasts.get(session_id)
@@ -1407,6 +1554,16 @@ async def upload_broadcast_chunk(
         rec.size_bytes = session.total_bytes
         rec.duration_seconds = elapsed
         db.commit()
+
+    # Cada ~15 segundos (cada 5 fragmentos), auditar de forma autónoma con Gemini
+    if _whatsapp_config.get("auto_notify_alerts") and session.chunks_count >= 3 and session.chunks_count % 5 == 0:
+        background.add_task(
+            run_continuous_audit_task,
+            session.session_id,
+            session.camera_id,
+            session.camera_label,
+            session.stored_name
+        )
 
     return {
         "status": "ok",
@@ -1480,3 +1637,180 @@ async def webrtc_signaling_endpoint(websocket: WebSocket, camera_id: str):
         webrtc_manager.disconnect(camera_id, websocket)
 
 
+
+
+@api_router.get("/cctv/whatsapp-config", tags=["cctv-live"])
+def get_whatsapp_config():
+    return _whatsapp_config
+
+
+@api_router.post("/cctv/whatsapp-config", tags=["cctv-live"])
+def update_whatsapp_config(payload: dict):
+    if "phone_number" in payload:
+        _whatsapp_config["phone_number"] = payload["phone_number"].strip()
+    if "auto_notify_alerts" in payload:
+        _whatsapp_config["auto_notify_alerts"] = bool(payload["auto_notify_alerts"])
+    if "coordinator_name" in payload:
+        _whatsapp_config["coordinator_name"] = payload["coordinator_name"].strip()
+    return _whatsapp_config
+
+
+@api_router.post("/cctv/whatsapp-test", tags=["cctv-live"])
+def test_whatsapp_alert(payload: dict):
+    phone = payload.get("phone_number") or _whatsapp_config.get("phone_number", "+573105551234")
+    camera_label = payload.get("camera_label", "Cámara Salón 302")
+    incident_type = payload.get("incident_type", "FIGHT")
+    msg, link = format_whatsapp_alert_message(
+        camera_label=camera_label,
+        location="Segundo Piso - Salón 302",
+        incident_type=incident_type,
+        title="Simulación de Prueba de Alerta en Directo",
+        description="Se ha verificado el enlace de comunicación institucional. El sistema notificará de inmediato aquí cualquier hecho de riesgo detectado por la IA.",
+        confidence="Alta fidelidad",
+        suggested_action="Prueba de enlace exitosa. No se requiere intervención.",
+        phone_number=phone,
+    )
+    return {
+        "status": "ok",
+        "phone_number": phone,
+        "message": msg,
+        "whatsapp_link": link,
+    }
+
+
+@api_router.get("/cctv/alerts", tags=["cctv-live"])
+def list_cctv_alerts(limit: int = 30, db: Session = Depends(get_db)):
+    from app.models import CCTVLiveAlert
+    alerts = db.scalars(
+        select(CCTVLiveAlert).order_by(desc(CCTVLiveAlert.created_at)).limit(limit)
+    ).all()
+    results = []
+    phone = _whatsapp_config.get("phone_number", "+573105551234")
+    for a in alerts:
+        _, link = format_whatsapp_alert_message(
+            camera_label=a.camera_label,
+            location=a.camera.location if a.camera else a.camera_label,
+            incident_type=a.incident_type,
+            title=a.title,
+            description=a.description,
+            confidence=a.confidence,
+            suggested_action=a.suggested_action,
+            phone_number=a.whatsapp_recipient or phone,
+        )
+        results.append({
+            "id": a.id,
+            "session_id": a.session_id,
+            "camera_id": a.camera_id,
+            "camera_label": a.camera_label,
+            "incident_type": a.incident_type,
+            "severity": a.severity,
+            "title": a.title,
+            "description": a.description,
+            "confidence": a.confidence,
+            "suggested_action": a.suggested_action,
+            "whatsapp_notified": a.whatsapp_notified,
+            "whatsapp_recipient": a.whatsapp_recipient or phone,
+            "whatsapp_link": link,
+            "created_at": a.created_at.isoformat(),
+        })
+    return results
+
+
+@api_router.post("/cctv/alerts/audit-now", tags=["cctv-live"])
+def manual_audit_live_camera(payload: dict, db: Session = Depends(get_db)):
+    from app.services.gemini import analyze_live_stream_snippet
+    from app.models import CCTVLiveAlert, Camera, CameraRecording
+    camera_id = payload.get("camera_id")
+    if not camera_id:
+        raise HTTPException(status_code=400, detail="camera_id requerido")
+
+    cam = db.get(Camera, camera_id)
+    if not cam:
+        raise HTTPException(status_code=404, detail="Cámara no encontrada")
+
+    # Buscar archivo activo de broadcast o última grabación
+    session_id = _camera_active_session.get(camera_id)
+    session = _active_broadcasts.get(session_id) if session_id else None
+
+    video_path = None
+    if session:
+        video_path = settings.upload_dir / session.stored_name
+    else:
+        last_rec = db.scalar(
+            select(CameraRecording)
+            .where(CameraRecording.camera_id == camera_id)
+            .order_by(desc(CameraRecording.created_at))
+        )
+        if last_rec:
+            video_path = settings.upload_dir / last_rec.stored_name
+
+    if not video_path or not video_path.is_file() or video_path.stat().st_size < 1000:
+        return {
+            "status": "normal",
+            "incident_detected": False,
+            "message": "La cámara se encuentra en estado normal y sin anomalías.",
+            "camera_label": cam.label,
+        }
+
+    res = analyze_live_stream_snippet(video_path, cam.label, cam.location or cam.label)
+    phone = _whatsapp_config.get("phone_number", "+573105551234")
+
+    if res.get("incident_detected"):
+        incident_type = res.get("incident_type", "FIGHT")
+        title = res.get("title", "Incidente Detectado en Vivo por Gemini")
+        description = res.get("description", "Situación de riesgo observada.")
+        severity = res.get("severity", "ALTA")
+        confidence = res.get("confidence", "Alta fidelidad")
+        action = res.get("suggested_action", "Verificar de inmediato en el aula.")
+
+        _, wa_link = format_whatsapp_alert_message(
+            camera_label=cam.label,
+            location=cam.location or cam.label,
+            incident_type=incident_type,
+            title=title,
+            description=description,
+            confidence=confidence,
+            suggested_action=action,
+            phone_number=phone,
+        )
+
+        alert = CCTVLiveAlert(
+            session_id=session_id,
+            camera_id=cam.id,
+            camera_label=cam.label,
+            incident_type=incident_type,
+            severity=severity,
+            title=title,
+            description=description,
+            confidence=confidence,
+            suggested_action=action,
+            whatsapp_notified=True,
+            whatsapp_recipient=phone,
+        )
+        db.add(alert)
+        db.commit()
+        db.refresh(alert)
+
+        return {
+            "status": "incident_detected",
+            "incident_detected": True,
+            "alert": {
+                "id": alert.id,
+                "camera_label": cam.label,
+                "incident_type": incident_type,
+                "title": title,
+                "description": description,
+                "severity": severity,
+                "confidence": confidence,
+                "suggested_action": action,
+                "whatsapp_link": wa_link,
+                "created_at": alert.created_at.isoformat(),
+            }
+        }
+
+    return {
+        "status": "normal",
+        "incident_detected": False,
+        "camera_label": cam.label,
+        "message": res.get("description", "Convivencia pacífica observada por Gemini IA."),
+    }

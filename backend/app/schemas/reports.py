@@ -295,3 +295,32 @@ class ChatResponse(BaseModel):
     reply: str
     suggested_actions: list[str] = Field(default_factory=list)
 
+
+class WhatsAppConfigRequest(BaseModel):
+    phone_number: str
+    auto_notify_alerts: bool = True
+    coordinator_name: str | None = "Coordinador de Convivencia"
+
+
+class WhatsAppAlertTestRequest(BaseModel):
+    phone_number: str
+    camera_label: str = "Cámara Salón 302"
+    incident_type: str = "FIGHT"
+
+
+class CCTVLiveAlertResponse(BaseModel):
+    id: str
+    session_id: str | None = None
+    camera_id: str
+    camera_label: str
+    incident_type: str
+    severity: str
+    title: str
+    description: str
+    confidence: str
+    suggested_action: str | None = None
+    whatsapp_notified: bool = False
+    whatsapp_recipient: str | None = None
+    whatsapp_link: str | None = None
+    created_at: datetime
+

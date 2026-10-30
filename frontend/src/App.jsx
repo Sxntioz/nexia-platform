@@ -2417,6 +2417,275 @@ function LiveStreamSpotlight({ camera, session, isMuted }) {
 /* =========================================================================
    COMPONENTE: MODAL PARA CONECTAR SMARTPHONE
    ========================================================================= */
+
+/* =========================================================================
+   COMPONENTE: MODAL DE CONFIGURACIÓN DE WHATSAPP PARA ALERTAS
+   ========================================================================= */
+function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
+  const [phone, setPhone] = useState(config?.phone_number || '+573105551234')
+  const [autoNotify, setAutoNotify] = useState(config?.auto_notify_alerts ?? true)
+  const [coordinator, setCoordinator] = useState(config?.coordinator_name || 'Coordinador de Convivencia')
+  const [testResult, setTestResult] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (config) {
+      setPhone(config.phone_number || '+573105551234')
+      setAutoNotify(config.auto_notify_alerts ?? true)
+      setCoordinator(config.coordinator_name || 'Coordinador de Convivencia')
+    }
+  }, [config, isOpen])
+
+  if (!isOpen) return null
+
+  const handleSave = async (e) => {
+    e.preventDefault()
+    setBusy(true)
+    try {
+      const updated = await apiRequest('/cctv/whatsapp-config', {
+        method: 'POST',
+        body: JSON.stringify({
+          phone_number: phone,
+          auto_notify_alerts: autoNotify,
+          coordinator_name: coordinator
+        })
+      })
+      onSaveConfig(updated)
+      onClose()
+    } catch (err) {
+      alert(`Error guardando configuración: ${err.message}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleTestWhatsApp = async () => {
+    setBusy(true)
+    setTestResult(null)
+    try {
+      const res = await apiRequest('/cctv/whatsapp-test', {
+        method: 'POST',
+        body: JSON.stringify({ phone_number: phone, camera_label: 'Cámara Salón 302' })
+      })
+      setTestResult(res)
+      if (res.whatsapp_link) {
+        window.open(res.whatsapp_link, '_blank')
+      }
+    } catch (err) {
+      alert(`Error en prueba de WhatsApp: ${err.message}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose} style={{ zIndex: 1200 }}>
+      <div
+        className="modal-dialog"
+        onClick={e => e.stopPropagation()}
+        style={{ maxWidth: '520px', background: 'rgba(15, 23, 42, 0.98)', border: '1px solid rgba(37, 211, 102, 0.4)', borderRadius: '20px', padding: '26px' }}
+      >
+        <button className="auth-close-btn" onClick={onClose} aria-label="Cerrar modal">
+          <Icon name="close" size={18} />
+        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+          <span style={{ fontSize: '1.8rem' }}>📲</span>
+          <div>
+            <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800 }}>Enlace de Alertas WhatsApp IA</h2>
+            <small style={{ color: 'var(--text-muted)' }}>Notificaciones inmediatas a directivos de convivencia</small>
+          </div>
+        </div>
+
+        <p style={{ fontSize: '0.86rem', color: '#94a3b8', lineHeight: 1.5, margin: '10px 0 16px' }}>
+          Configura la línea directa a la cual el Motor Gemini IA enviará notificaciones instantáneas (con fecha, hora, cámara, tipo de hecho y recomendación de Ley 1620) al detectar anomalías durante la transmisión.
+        </p>
+
+        <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <div>
+            <label style={{ fontSize: '0.8rem', color: '#e2e8f0', fontWeight: 600, display: 'block', marginBottom: '6px' }}>
+              Número de Teléfono / WhatsApp Institucional:
+            </label>
+            <input
+              type="text"
+              value={phone}
+              onChange={e => setPhone(e.target.value)}
+              placeholder="+57 310 123 4567"
+              required
+              style={{ width: '100%', padding: '10px 12px', background: 'rgba(30, 41, 59, 0.8)', border: '1px solid rgba(255, 255, 255, 0.15)', borderRadius: '10px', color: '#fff', fontSize: '0.95rem', fontFamily: 'monospace' }}
+            />
+            <small style={{ color: 'var(--text-muted)', fontSize: '0.74rem', marginTop: '4px', display: 'block' }}>
+              Incluye el código de país (ej. +57 para Colombia).
+            </small>
+          </div>
+
+          <div>
+            <label style={{ fontSize: '0.8rem', color: '#e2e8f0', fontWeight: 600, display: 'block', marginBottom: '6px' }}>
+              Cargo o Responsable Receptor:
+            </label>
+            <input
+              type="text"
+              value={coordinator}
+              onChange={e => setCoordinator(e.target.value)}
+              placeholder="Coordinador de Convivencia / Rectoría"
+              style={{ width: '100%', padding: '10px 12px', background: 'rgba(30, 41, 59, 0.8)', border: '1px solid rgba(255, 255, 255, 0.15)', borderRadius: '10px', color: '#fff', fontSize: '0.9rem' }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(30, 41, 59, 0.5)', padding: '12px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+            <input
+              type="checkbox"
+              id="autoNotify"
+              checked={autoNotify}
+              onChange={e => setAutoNotify(e.target.checked)}
+              style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+            />
+            <label htmlFor="autoNotify" style={{ fontSize: '0.84rem', color: '#f8fafc', cursor: 'pointer', margin: 0 }}>
+              <strong>Centinela Autónomo:</strong> Analizar continuamente las transmisiones activas y disparar alertas inmediatas.
+            </label>
+          </div>
+
+          {testResult && (
+            <div style={{ background: 'rgba(37, 211, 102, 0.15)', border: '1px solid #25D366', padding: '10px 14px', borderRadius: '10px', color: '#25D366', fontSize: '0.82rem' }}>
+              ✅ Enlace probado correctamente. Se abrió la ventana de WhatsApp con el mensaje estructurado de prueba.
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: '10px', marginTop: '6px', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="button secondary"
+              onClick={handleTestWhatsApp}
+              disabled={busy || !phone.trim()}
+              style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px', borderColor: '#25D366', color: '#25D366' }}
+            >
+              🧪 Probar Enlace WhatsApp
+            </button>
+            <button
+              type="submit"
+              className="button primary"
+              disabled={busy}
+              style={{ flex: 1, justifyContent: 'center', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)' }}
+            >
+              {busy ? 'Guardando...' : '💾 Guardar Enlace'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+/* =========================================================================
+   COMPONENTE: MODAL DE ALERTA DE INCIDENTE DETECTADO POR IA EN VIVO
+   ========================================================================= */
+function LiveIncidentAlertModal({ alert, onClose, onFileReport }) {
+  if (!alert) return null
+
+  const handleOpenWhatsApp = () => {
+    if (alert.whatsapp_link) {
+      window.open(alert.whatsapp_link, '_blank')
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose} style={{ zIndex: 1300 }}>
+      <div
+        className="modal-dialog"
+        onClick={e => e.stopPropagation()}
+        style={{
+          maxWidth: '560px',
+          background: 'linear-gradient(145deg, rgba(15, 23, 42, 0.99) 0%, rgba(30, 10, 15, 0.98) 100%)',
+          border: '2px solid #ef4444',
+          boxShadow: '0 0 50px rgba(239, 68, 68, 0.4)',
+          borderRadius: '22px',
+          padding: '28px'
+        }}
+      >
+        <button className="auth-close-btn" onClick={onClose} aria-label="Cerrar alerta">
+          <Icon name="close" size={18} />
+        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+          <span style={{ fontSize: '2.4rem', animation: 'pulse-live-dot 1.5s infinite ease-in-out' }}>🚨</span>
+          <div>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', fontWeight: 800, color: '#ef4444', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+              <span className="live-pulse" /> ALERTA CRÍTICA EN VIVO · MOTOR GEMINI IA
+            </div>
+            <h2 style={{ margin: '2px 0 0', fontSize: '1.35rem', fontWeight: 800, color: '#f8fafc' }}>
+              {alert.title || 'Incidente Detectado en Tiempo Real'}
+            </h2>
+          </div>
+        </div>
+
+        <div style={{ background: 'rgba(15, 23, 42, 0.7)', border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: '12px', padding: '14px', marginBottom: '14px', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.86rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '6px' }}>
+            <span style={{ color: '#94a3b8' }}>📍 Cámara / Salón:</span>
+            <strong style={{ color: 'var(--accent-cyan)' }}>{alert.camera_label}</strong>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '6px' }}>
+            <span style={{ color: '#94a3b8' }}>⚠️ Tipo de Falta:</span>
+            <strong style={{ color: '#fca5a5' }}>{alert.incident_type}</strong>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '6px' }}>
+            <span style={{ color: '#94a3b8' }}>🔍 Fidelidad Visual IA:</span>
+            <span className={`fidelity-badge ${alert.confidence?.toLowerCase().includes('alta') ? 'fidelity-high' : 'fidelity-medium'}`}>
+              {alert.confidence}
+            </span>
+          </div>
+          <div>
+            <span style={{ color: '#94a3b8', display: 'block', marginBottom: '4px' }}>📝 Descripción Observada:</span>
+            <p style={{ margin: 0, color: '#e2e8f0', lineHeight: 1.5, background: 'rgba(0,0,0,0.25)', padding: '8px 10px', borderRadius: '6px' }}>
+              {alert.description}
+            </p>
+          </div>
+          {alert.suggested_action && (
+            <div style={{ marginTop: '4px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '8px 10px', borderRadius: '8px', color: 'var(--accent-cyan)', fontSize: '0.82rem' }}>
+              ⚖️ <strong>Recomendación Ley 1620:</strong> {alert.suggested_action}
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <button
+            className="button primary"
+            onClick={handleOpenWhatsApp}
+            style={{
+              padding: '12px 18px',
+              justifyContent: 'center',
+              fontWeight: 800,
+              fontSize: '0.92rem',
+              background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)',
+              border: 'none',
+              boxShadow: '0 4px 15px rgba(37, 211, 102, 0.4)'
+            }}
+          >
+            📲 Notificar a WhatsApp Oficial Ahora
+          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {onFileReport && (
+              <button
+                className="button secondary small"
+                onClick={() => { onClose(); onFileReport(alert); }}
+                style={{ flex: 1, justifyContent: 'center' }}
+              >
+                📑 Abrir Caso Institucional
+              </button>
+            )}
+            <button
+              className="button ghost small"
+              onClick={onClose}
+              style={{ flex: 1, justifyContent: 'center' }}
+            >
+              Entendido / Descartar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ConnectPhoneModal({ isOpen, onClose, cameras, selectedCam, liveStatus, onOpenBroadcaster }) {
   const [copied, setCopied] = useState(false)
   const [modalCamId, setModalCamId] = useState('')
@@ -3063,6 +3332,11 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
   const [connectModal, setConnectModal] = useState(false)
   const [liveStatus, setLiveStatus] = useState({})
   const [isTheater, setIsTheater] = useState(false)
+  const [whatsappModal, setWhatsappModal] = useState(false)
+  const [activeAlert, setActiveAlert] = useState(null)
+  const [auditBusy, setAuditBusy] = useState(false)
+  const [auditToast, setAuditToast] = useState(null)
+  const [whatsappConfig, setWhatsappConfig] = useState({ phone_number: '+573105551234', auto_notify_alerts: true })
   const t = translations[lang] || translations.es
 
   const loadData = useCallback(async () => {
@@ -3102,11 +3376,61 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
     }
     checkLive()
     const intv = setInterval(checkLive, 3000)
+
+    // Cargar configuración de WhatsApp institucional
+    apiRequest('/cctv/whatsapp-config')
+      .then(cfg => { if (mounted && cfg) setWhatsappConfig(cfg) })
+      .catch(() => {})
+
     return () => {
       mounted = false
       clearInterval(intv)
     }
   }, [])
+
+  // Escuchar alertas de IA en tiempo real sobre el WebSocket global
+  useEffect(() => {
+    let ws = null
+    try {
+      ws = new WebSocket(getWebSocketUrl('/api/cctv/ws/global'))
+      ws.onmessage = (ev) => {
+        try {
+          const data = JSON.parse(ev.data)
+          if (data.type === 'live_ai_alert' && data.alert) {
+            setActiveAlert(data.alert)
+          }
+        } catch (_e) {}
+      }
+    } catch (_e) {}
+    return () => { if (ws) ws.close() }
+  }, [])
+
+  const handleAuditSelectedCam = async () => {
+    const target = selectedCam || filteredCameras[0]
+    if (!target) return
+    setAuditBusy(true)
+    setAuditToast(null)
+    try {
+      const res = await apiRequest('/cctv/alerts/audit-now', {
+        method: 'POST',
+        body: JSON.stringify({ camera_id: target.id })
+      })
+      if (res.incident_detected && res.alert) {
+        setActiveAlert(res.alert)
+      } else {
+        setAuditToast({
+          type: 'success',
+          text: `✅ ${target.label}: Convivencia pacífica observada por Gemini IA. No se detectan anomalías.`
+        })
+        setTimeout(() => setAuditToast(null), 6000)
+      }
+    } catch (err) {
+      setAuditToast({ type: 'warning', text: `Aviso de auditoría: ${err.message}` })
+      setTimeout(() => setAuditToast(null), 5000)
+    } finally {
+      setAuditBusy(false)
+    }
+  }
 
   const handleSelectCam = (cam) => {
     setSelectedCam(cam)
@@ -3153,6 +3477,23 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
                 {Object.keys(liveStatus).length > 0 ? `🔴 ${Object.keys(liveStatus).length} EN VIVO` : 'WEBRTC / STANDBY'}
               </small>
             </div>
+            <button
+              className="button secondary small"
+              onClick={() => setWhatsappModal(true)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', borderColor: 'rgba(37, 211, 102, 0.4)', color: '#25D366', fontWeight: 700 }}
+              title="Configurar teléfono institucional para alertas de Gemini IA"
+            >
+              <span style={{ fontSize: '1rem' }}>📲</span> Alertas WhatsApp
+            </button>
+            <button
+              className="button secondary small"
+              onClick={handleAuditSelectedCam}
+              disabled={auditBusy}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', borderColor: 'rgba(56, 189, 248, 0.4)', color: 'var(--accent-cyan)', fontWeight: 700 }}
+              title="Auditar la cámara actual en directo con Gemini IA"
+            >
+              {auditBusy ? '⏳ Analizando...' : '🤖 Auditar con Gemini'}
+            </button>
             <button
               className="button primary small"
               onClick={() => setConnectModal(true)}
@@ -3414,6 +3755,25 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
           </div>
         )}
 
+        {auditToast && (
+          <div style={{
+            position: 'fixed',
+            bottom: '24px',
+            right: '24px',
+            zIndex: 1100,
+            background: auditToast.type === 'success' ? 'rgba(16, 185, 129, 0.95)' : 'rgba(245, 158, 11, 0.95)',
+            color: '#fff',
+            padding: '12px 18px',
+            borderRadius: '12px',
+            boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
+            fontWeight: 700,
+            fontSize: '0.88rem',
+            animation: 'fadeIn 0.2s ease-out'
+          }}>
+            {auditToast.text}
+          </div>
+        )}
+
         {/* Modal para conectar celular en vivo */}
         <ConnectPhoneModal
           isOpen={connectModal}
@@ -3422,6 +3782,25 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
           selectedCam={selectedCam}
           liveStatus={liveStatus}
           onOpenBroadcaster={(cam) => navigate('cctv_broadcast', { camera_id: cam?.id })}
+        />
+
+        {/* Modal de Configuración WhatsApp */}
+        <WhatsAppConfigModal
+          isOpen={whatsappModal}
+          onClose={() => setWhatsappModal(false)}
+          config={whatsappConfig}
+          onSaveConfig={setWhatsappConfig}
+        />
+
+        {/* Modal de Alerta Crítica en Vivo por Gemini IA */}
+        <LiveIncidentAlertModal
+          alert={activeAlert}
+          onClose={() => setActiveAlert(null)}
+          onFileReport={(al) => navigate('report', {
+            location: al.camera_label,
+            incident_type: al.incident_type || 'FIGHT',
+            description: `[Alerta IA Autónoma] ${al.description}`
+          })}
         />
       </main>
     </AdminLayout>
