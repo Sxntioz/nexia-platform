@@ -2422,7 +2422,13 @@ function LiveStreamSpotlight({ camera, session, isMuted }) {
    COMPONENTE: MODAL DE CONFIGURACIÓN DE WHATSAPP PARA ALERTAS
    ========================================================================= */
 function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
-  const [phone, setPhone] = useState(config?.phone_number || '+573105551234')
+  const [phone, setPhone] = useState(() => {
+    try {
+      const local = localStorage.getItem('nexia_whatsapp_config')
+      if (local) return JSON.parse(local).phone_number || '+573145819221'
+    } catch (_e) {}
+    return config?.phone_number || '+573145819221'
+  })
   const [autoNotify, setAutoNotify] = useState(config?.auto_notify_alerts ?? true)
   const [coordinator, setCoordinator] = useState(config?.coordinator_name || 'Coordinador de Convivencia')
   const [testResult, setTestResult] = useState(null)
@@ -2430,7 +2436,7 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
 
   useEffect(() => {
     if (config) {
-      setPhone(config.phone_number || '+573105551234')
+      setPhone(config.phone_number || '+573145819221')
       setAutoNotify(config.auto_notify_alerts ?? true)
       setCoordinator(config.coordinator_name || 'Coordinador de Convivencia')
     }
@@ -2441,38 +2447,49 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
   const handleSave = async (e) => {
     e.preventDefault()
     setBusy(true)
+    const newCfg = {
+      phone_number: phone.trim(),
+      auto_notify_alerts: autoNotify,
+      coordinator_name: coordinator.trim()
+    }
     try {
-      const updated = await apiRequest('/cctv/whatsapp-config', {
+      localStorage.setItem('nexia_whatsapp_config', JSON.stringify(newCfg))
+    } catch (_e) {}
+    onSaveConfig(newCfg)
+
+    try {
+      await apiRequest('/cctv/whatsapp-config', {
         method: 'POST',
-        body: JSON.stringify({
-          phone_number: phone,
-          auto_notify_alerts: autoNotify,
-          coordinator_name: coordinator
-        })
+        body: JSON.stringify(newCfg)
       })
-      onSaveConfig(updated)
-      onClose()
-    } catch (err) {
-      alert(`Error guardando configuración: ${err.message}`)
+    } catch (_err) {
+      // Guardado local permanente ya completado
     } finally {
       setBusy(false)
+      onClose()
     }
   }
 
   const handleTestWhatsApp = async () => {
     setBusy(true)
     setTestResult(null)
+    const cleanNum = phone.replace(/[^\d]/g, '')
+    const now = new Date()
+    const testMsg = `🚨 *ALERTA EN VIVO — SISTEMA NEXIA IA* 🚨\n━━━━━━━━━━━━━━━━━━━━━\n📅 *Fecha:* ${now.toLocaleDateString()}\n⏰ *Hora:* ${now.toLocaleTimeString()}\n📍 *Lugar / Cámara:* Cámara Salón 201 (Verificación de Conexión)\n⚠️ *Hecho Detectado:* Enlace Directo WhatsApp Verificado\n🔍 *Fidelidad IA:* Alta fidelidad\n\n📝 *Detalle:* Se ha vinculado exitosamente esta línea de WhatsApp para recepción inmediata de reportes y alertas en tiempo real generadas por Gemini IA.\n\n📋 *Recomendación Ley 1620:* Línea directiva habilitada para actuación inmediata.\n\n🔗 *Ver Circuito CCTV en Vivo:*\nhttps://nexia-platform.vercel.app/#admin_cctv\n━━━━━━━━━━━━━━━━━━━━━\n_Notificación institucional generada por Motor NEXIA Vision IA_`
+    const clientWaLink = `https://wa.me/${cleanNum}?text=${encodeURIComponent(testMsg)}`
+    
+    // Abrir WhatsApp inmediatamente sin demoras de red
+    window.open(clientWaLink, '_blank')
+    setTestResult({ whatsapp_link: clientWaLink })
+
     try {
       const res = await apiRequest('/cctv/whatsapp-test', {
         method: 'POST',
-        body: JSON.stringify({ phone_number: phone, camera_label: 'Cámara Salón 302' })
+        body: JSON.stringify({ phone_number: phone, camera_label: 'Cámara Salón 201' })
       })
-      setTestResult(res)
-      if (res.whatsapp_link) {
-        window.open(res.whatsapp_link, '_blank')
-      }
-    } catch (err) {
-      alert(`Error en prueba de WhatsApp: ${err.message}`)
+      if (res?.whatsapp_link) setTestResult(res)
+    } catch (_e) {
+      // El enlace directo ya abrió WhatsApp exitosamente
     } finally {
       setBusy(false)
     }
@@ -2583,9 +2600,19 @@ function LiveIncidentAlertModal({ alert, onClose, onFileReport }) {
   if (!alert) return null
 
   const handleOpenWhatsApp = () => {
-    if (alert.whatsapp_link) {
-      window.open(alert.whatsapp_link, '_blank')
+    let link = alert.whatsapp_link
+    if (!link) {
+      const localCfg = (() => {
+        try {
+          const s = localStorage.getItem('nexia_whatsapp_config')
+          return s ? JSON.parse(s) : null
+        } catch (_e) { return null }
+      })()
+      const ph = (localCfg?.phone_number || '+573145819221').replace(/[^\d]/g, '')
+      const msg = `🚨 *ALERTA EN VIVO — SISTEMA NEXIA IA* 🚨\n📍 *Cámara:* ${alert.camera_label}\n⚠️ *Hecho:* ${alert.incident_type}\n🔍 *Fidelidad:* ${alert.confidence}\n📝 *Detalle:* ${alert.description}\n⚖️ *Ley 1620:* ${alert.suggested_action || 'Supervisión en el aula'}`
+      link = `https://wa.me/${ph}?text=${encodeURIComponent(msg)}`
     }
+    window.open(link, '_blank')
   }
 
   return (
@@ -2793,6 +2820,7 @@ function CCTVBroadcaster({ user }) {
   const [cameras, setCameras] = useState([])
   const [selectedCamId, setSelectedCamId] = useState('')
   const [facingMode, setFacingMode] = useState('environment') // 'environment' o 'user'
+  const [qualityPreset, setQualityPreset] = useState('1080p') // '720p', '1080p', '4K'
   const [stream, setStream] = useState(null)
   const [isBroadcasting, setIsBroadcasting] = useState(false)
   const [sessionId, setSessionId] = useState(null)
@@ -2804,6 +2832,12 @@ function CCTVBroadcaster({ user }) {
   const [torchOn, setTorchOn] = useState(false)
   const [zoomLevel, setZoomLevel] = useState(1.0)
   const [aspectMode, setAspectMode] = useState('portrait')
+
+  // Estados de Auditoría y Reconocimiento IA en Tiempo Real
+  const [autoAudit, setAutoAudit] = useState(true)
+  const [isAuditingFrame, setIsAuditingFrame] = useState(false)
+  const [liveDiagnosis, setLiveDiagnosis] = useState(null)
+  const [auditToast, setAuditToast] = useState(null)
 
   const videoPreviewRef = useRef(null)
   const mediaRecorderRef = useRef(null)
@@ -2817,7 +2851,6 @@ function CCTVBroadcaster({ user }) {
       .then(cams => {
         if (Array.isArray(cams)) {
           setCameras(cams)
-          // Extraer cámara especificada en hash o query string: #broadcast?cam=xyz
           const hashQuery = window.location.hash.includes('?') ? window.location.hash.split('?')[1] : ''
           const search = window.location.search ? window.location.search.slice(1) : ''
           const params = new URLSearchParams(hashQuery || search)
@@ -2834,7 +2867,7 @@ function CCTVBroadcaster({ user }) {
       .catch(() => {})
   }, [])
 
-  // Iniciar cámara del dispositivo
+  // Iniciar cámara del dispositivo con ALTA CALIDAD según el preset seleccionado
   useEffect(() => {
     let localStream = null
     const initCam = async () => {
@@ -2844,12 +2877,15 @@ function CCTVBroadcaster({ user }) {
       }
       try {
         setErrorMsg('')
+        const qualityConstraints = {
+          '720p': { width: { ideal: 1280, min: 854 }, height: { ideal: 720, min: 480 }, frameRate: { ideal: 30 } },
+          '1080p': { width: { ideal: 1920, min: 1280 }, height: { ideal: 1080, min: 720 }, frameRate: { ideal: 30, max: 60 } },
+          '4K': { width: { ideal: 3840, min: 1920 }, height: { ideal: 2160, min: 1080 }, frameRate: { ideal: 30 } }
+        }
         const s = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode,
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            frameRate: { ideal: 30 }
+            ...(qualityConstraints[qualityPreset] || qualityConstraints['1080p'])
           },
           audio: false
         })
@@ -2861,7 +2897,7 @@ function CCTVBroadcaster({ user }) {
         }
       } catch (err) {
         console.error('Error al acceder a la cámara:', err)
-        setErrorMsg('No se pudo acceder a la cámara del dispositivo. Por favor verifica que tu navegador tenga los permisos de cámara concedidos.')
+        setErrorMsg('No se pudo acceder a la cámara en alta resolución. Asegúrate de conceder permisos de cámara en tu navegador.')
       }
     }
 
@@ -2872,9 +2908,9 @@ function CCTVBroadcaster({ user }) {
         localStream.getTracks().forEach(t => t.stop())
       }
     }
-  }, [facingMode])
+  }, [facingMode, qualityPreset])
 
-  // Vincular stream al elemento de video cuando se monte el visor o se actualice el usuario
+  // Vincular stream al elemento de video
   useEffect(() => {
     if (videoPreviewRef.current && stream) {
       if (videoPreviewRef.current.srcObject !== stream) {
@@ -2884,7 +2920,71 @@ function CCTVBroadcaster({ user }) {
     }
   }, [stream, user])
 
-  // Iniciar transmisión en vivo
+  // Función para Auditar la Escena Actual con Gemini IA (Reconoce Personas, Acciones y Ley 1620)
+  const handleAnalyzeCurrentScene = useCallback(async (isAuto = false) => {
+    if (!videoPreviewRef.current || !selectedCamId) return
+    const vid = videoPreviewRef.current
+    if (vid.readyState < 2) return
+
+    setIsAuditingFrame(true)
+    try {
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.min(vid.videoWidth || 1280, 1280)
+      canvas.height = Math.min(vid.videoHeight || 720, 720)
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(vid, 0, 0, canvas.width, canvas.height)
+
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85))
+      if (!blob) return
+
+      const fd = new FormData()
+      fd.append('camera_id', selectedCamId)
+      fd.append('frame', blob, 'frame.jpg')
+
+      const res = await apiRequest('/cctv/broadcast/analyze-frame', {
+        method: 'POST',
+        body: fd
+      })
+
+      if (res) {
+        setLiveDiagnosis({
+          ...res,
+          timestamp: new Date().toLocaleTimeString()
+        })
+        if (res.incident_detected) {
+          setAuditToast({
+            type: 'alert',
+            text: `🚨 [ALERTA IA] ${res.title}: ${res.incident_type}. Fidelidad: ${res.confidence}`,
+            whatsapp_link: res.whatsapp_link
+          })
+        } else if (!isAuto) {
+          setAuditToast({
+            type: 'ok',
+            text: `✅ Convivencia Pacífica (${res.persons_count} personas observadas). Fidelidad: ${res.confidence}`
+          })
+          setTimeout(() => setAuditToast(null), 5000)
+        }
+      }
+    } catch (err) {
+      if (!isAuto) {
+        setAuditToast({ type: 'warning', text: `Aviso de auditoría: ${err.message}` })
+        setTimeout(() => setAuditToast(null), 4000)
+      }
+    } finally {
+      setIsAuditingFrame(false)
+    }
+  }, [selectedCamId])
+
+  // Ciclo de auto-auditoría continua cada 12 segundos mientras se emite en vivo
+  useEffect(() => {
+    if (!isBroadcasting || !autoAudit) return
+    const intv = setInterval(() => {
+      handleAnalyzeCurrentScene(true)
+    }, 12000)
+    return () => clearInterval(intv)
+  }, [isBroadcasting, autoAudit, handleAnalyzeCurrentScene])
+
+  // Iniciar transmisión en vivo con Bitrate Mejorado (Alta Fidelidad)
   const handleStartBroadcast = async () => {
     if (!stream) {
       setErrorMsg('Esperando acceso a la cámara...')
@@ -2893,7 +2993,6 @@ function CCTVBroadcaster({ user }) {
     setErrorMsg('')
     setSuccessInfo(null)
     try {
-      // 1. Notificar al backend el inicio de sesión con orientación
       const res = await apiRequest('/cctv/broadcast/start', {
         method: 'POST',
         body: JSON.stringify({ camera_id: selectedCamId, aspect_mode: aspectMode })
@@ -2905,6 +3004,9 @@ function CCTVBroadcaster({ user }) {
       setSecondsElapsed(0)
       setChunksSent(0)
       setBytesSent(0)
+
+      // Bitrate de alta fidelidad: 4.0 Mbps para 1080p, 6.0 Mbps para 4K
+      const bitrate = qualityPreset === '4K' ? 6000000 : (qualityPreset === '1080p' ? 4000000 : 2500000)
 
       // 2. Conectar WebSocket para señalización WebRTC en vivo
       try {
@@ -2920,6 +3022,16 @@ function CCTVBroadcaster({ user }) {
         pcRef.current = pc
 
         stream.getTracks().forEach(track => pc.addTrack(track, stream))
+
+        // Ajustar bitrate en WebRTC
+        pc.getSenders().forEach(sender => {
+          if (sender.track && sender.track.kind === 'video') {
+            const params = sender.getParameters() || {}
+            if (!params.encodings || params.encodings.length === 0) params.encodings = [{}]
+            params.encodings[0].maxBitrate = bitrate
+            sender.setParameters(params).catch(() => {})
+          }
+        })
 
         pc.onicecandidate = (ev) => {
           if (ev.candidate && ws.readyState === WebSocket.OPEN) {
@@ -2947,15 +3059,21 @@ function CCTVBroadcaster({ user }) {
         console.warn('WebRTC signaling not active, using chunk streaming:', wsErr)
       }
 
-      // 3. Iniciar MediaRecorder para enviar fragmentos continuos
+      // 3. MediaRecorder en Alta Definición
       const mimeTypes = [
+        'video/webm;codecs=vp9,opus',
+        'video/webm;codecs=vp9',
+        'video/webm;codecs=vp8,opus',
         'video/webm;codecs=vp8',
         'video/webm',
-        'video/mp4;codecs=h264',
+        'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
         'video/mp4'
       ]
       const selectedMime = mimeTypes.find(m => MediaRecorder.isTypeSupported(m)) || ''
-      const recorder = new MediaRecorder(stream, selectedMime ? { mimeType: selectedMime, videoBitsPerSecond: 1000000 } : { videoBitsPerSecond: 1000000 })
+      const recorder = new MediaRecorder(
+        stream,
+        selectedMime ? { mimeType: selectedMime, videoBitsPerSecond: bitrate } : { videoBitsPerSecond: bitrate }
+      )
       mediaRecorderRef.current = recorder
 
       recorder.ondataavailable = async (e) => {
@@ -2978,13 +3096,16 @@ function CCTVBroadcaster({ user }) {
         }
       }
 
-      // Grabar y subir en rebanadas de 3 segundos
       recorder.start(3000)
 
-      // Cronómetro de transmisión
       timerRef.current = setInterval(() => {
         setSecondsElapsed(s => s + 1)
       }, 1000)
+
+      // Ejecutar primera auditoría de reconocimiento de escena
+      setTimeout(() => {
+        handleAnalyzeCurrentScene(true)
+      }, 3500)
 
     } catch (err) {
       console.error('Error iniciando transmisión:', err)
@@ -3041,7 +3162,6 @@ function CCTVBroadcaster({ user }) {
     }
   }
 
-  // Detectar automáticamente giro físico del teléfono
   useEffect(() => {
     const handleOrientation = () => {
       if (window.innerWidth > window.innerHeight) {
@@ -3052,7 +3172,6 @@ function CCTVBroadcaster({ user }) {
     return () => window.removeEventListener('resize', handleOrientation)
   }, [])
 
-  // Finalizar sesión en segundo plano si el usuario cierra la ventana o sale
   useEffect(() => {
     const handleBeforeUnload = () => {
       if (sessionId) {
@@ -3067,17 +3186,35 @@ function CCTVBroadcaster({ user }) {
 
   const toggleCameraFacing = () => {
     setFacingMode(f => (f === 'environment' ? 'user' : 'environment'))
+    setTorchOn(false)
   }
 
+  // Función mejorada de linterna con verificación de compatibilidad de hardware
   const toggleTorch = async () => {
-    if (!stream) return
+    if (!stream) {
+      alert('Primero debes activar la cámara.')
+      return
+    }
     const track = stream.getVideoTracks()[0]
-    if (track && typeof track.applyConstraints === 'function') {
+    if (!track) return
+
+    try {
+      const caps = track.getCapabilities ? track.getCapabilities() : {}
+      if (caps && 'torch' in caps && !caps.torch) {
+        alert('La linterna (flash) solo está disponible en la cámara trasera de dispositivos móviles que cuenten con flash físico.')
+        return
+      }
+      const nextTorch = !torchOn
+      await track.applyConstraints({
+        advanced: [{ torch: nextTorch }]
+      })
+      setTorchOn(nextTorch)
+    } catch (_err) {
       try {
         await track.applyConstraints({ advanced: [{ torch: !torchOn }] })
         setTorchOn(!torchOn)
-      } catch {
-        // No soportado en este dispositivo
+      } catch (_fallbackErr) {
+        alert('No se pudo activar la linterna en este dispositivo. Asegúrate de estar usando la cámara trasera en tu teléfono móvil.')
       }
     }
   }
@@ -3139,7 +3276,7 @@ function CCTVBroadcaster({ user }) {
         <div className="broadcaster-header">
           <div className="broadcaster-title">
             <span>📱</span>
-            <span>NEXIA Transmisor CCTV</span>
+            <span>NEXIA Transmisor CCTV HD</span>
           </div>
           <button className="button ghost small" onClick={() => navigate('admin_cctv')}>
             ← Salir al Panel
@@ -3169,7 +3306,7 @@ function CCTVBroadcaster({ user }) {
           </div>
         )}
 
-        {/* Barra de Controles Rápidos de Cámara (Zoom y Orientación) */}
+        {/* Barra de Controles Rápidos de Cámara (Zoom, Modo y Preset de Calidad) */}
         <div className="broadcaster-quick-tools">
           <div className="broadcaster-tool-group">
             <span className="broadcaster-tool-label">🔍 Zoom:</span>
@@ -3216,7 +3353,30 @@ function CCTVBroadcaster({ user }) {
           </div>
         </div>
 
-        {/* Viewfinder con la cámara */}
+        {/* Selector de Calidad de Video HD */}
+        <div className="broadcaster-quick-tools" style={{ marginTop: '4px' }}>
+          <div className="broadcaster-tool-group">
+            <span className="broadcaster-tool-label">💎 Calidad Video:</span>
+            {[
+              { key: '720p', label: '720p HD' },
+              { key: '1080p', label: '1080p Full HD ★' },
+              { key: '4K', label: '4K Ultra HD' }
+            ].map(q => (
+              <button
+                key={q.key}
+                type="button"
+                className={`broadcaster-zoom-chip ${qualityPreset === q.key ? 'active' : ''}`}
+                onClick={() => setQualityPreset(q.key)}
+                disabled={isBroadcasting}
+                title={isBroadcasting ? 'Detén la transmisión para cambiar la resolución' : `Cambiar a ${q.label}`}
+              >
+                {q.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Viewfinder con la cámara en Alta Definición */}
         <div className={`broadcaster-viewfinder-card ${aspectMode === 'portrait' ? 'portrait-frame' : 'landscape-frame'}`}>
           <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
             <video
@@ -3232,8 +3392,37 @@ function CCTVBroadcaster({ user }) {
                 width: '100%',
                 height: '100%',
                 objectFit: 'cover',
+                imageRendering: '-webkit-optimize-contrast',
+                filter: 'contrast(1.03) saturate(1.05)'
               }}
             />
+
+            {/* Target HUD Overlay de Reconocimiento */}
+            {liveDiagnosis && (
+              <div style={{
+                position: 'absolute',
+                top: '12px',
+                right: '12px',
+                zIndex: 10,
+                background: liveDiagnosis.incident_detected ? 'rgba(239, 68, 68, 0.9)' : 'rgba(15, 23, 42, 0.85)',
+                border: liveDiagnosis.incident_detected ? '1px solid #ef4444' : '1px solid rgba(56, 189, 248, 0.4)',
+                borderRadius: '8px',
+                padding: '4px 8px',
+                fontSize: '0.74rem',
+                color: '#fff',
+                fontWeight: 700,
+                backdropFilter: 'blur(4px)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}>
+                <span>👤 {liveDiagnosis.persons_count} {liveDiagnosis.persons_count === 1 ? 'persona' : 'personas'}</span>
+                <span>•</span>
+                <span style={{ color: liveDiagnosis.incident_detected ? '#fff' : 'var(--accent-cyan)' }}>
+                  {liveDiagnosis.scene_status === 'CRITICA' ? '🔴 CRÍTICA' : (liveDiagnosis.scene_status === 'RIESGO' ? '🟡 RIESGO' : '🟢 PACÍFICA')}
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="broadcaster-hud-corners" />
@@ -3245,7 +3434,7 @@ function CCTVBroadcaster({ user }) {
           </div>
 
           <div style={{ position: 'absolute', bottom: '12px', left: '14px', zIndex: 10, fontSize: '0.78rem', color: '#fff', textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}>
-            <strong>{selectedCam?.label || 'CAM Prueba Cel 1'}</strong> • {zoomLevel}x • {aspectMode === 'portrait' ? 'Vertical 9:16' : 'Horizontal 16:9'}
+            <strong>{selectedCam?.label || 'CAM Prueba Cel 1'}</strong> • {qualityPreset.toUpperCase()} • {zoomLevel}x • {aspectMode === 'portrait' ? 'Vertical 9:16' : 'Horizontal 16:9'}
           </div>
         </div>
 
@@ -3286,7 +3475,7 @@ function CCTVBroadcaster({ user }) {
           </div>
         )}
 
-        {/* Botón principal de transmisión */}
+        {/* Botón principal de transmisión y herramientas */}
         <div className="broadcaster-controls-bar">
           {!isBroadcasting ? (
             <button className="broadcaster-btn-main start" onClick={handleStartBroadcast}>
@@ -3302,20 +3491,126 @@ function CCTVBroadcaster({ user }) {
             <button className="broadcaster-action-btn" onClick={toggleCameraFacing} disabled={isBroadcasting}>
               🔄 Girar Cámara ({facingMode === 'environment' ? 'Trasera' : 'Frontal'})
             </button>
-            <button className="broadcaster-action-btn" onClick={toggleTorch}>
-              💡 Linterna
+            <button
+              className={`broadcaster-action-btn ${torchOn ? 'active' : ''}`}
+              onClick={toggleTorch}
+              style={{ background: torchOn ? 'rgba(250, 204, 21, 0.25)' : undefined, borderColor: torchOn ? '#facc15' : undefined, color: torchOn ? '#facc15' : undefined }}
+            >
+              💡 Linterna {torchOn ? '(ON)' : '(OFF)'}
             </button>
           </div>
         </div>
 
-        {/* Nota informativa de auditoría */}
-        <div style={{ background: 'rgba(30, 41, 59, 0.5)', padding: '12px', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.08)', fontSize: '0.8rem', color: '#94a3b8', lineHeight: 1.5 }}>
-          ℹ️ <strong>Protocolo de Hackathon:</strong> Esta cámara se sincroniza en vivo con la matriz CCTV del colegio. Si alguien radica un reporte escolar seleccionando <em>CAM Prueba Cel 1</em> durante esta transmisión, NEXIA recortará automáticamente el lapso exacto para que el motor Gemini IA audite las conductas conforme a la Ley 1620.
+        {/* PANEL DE CENTINELA AUTÓNOMO GEMINI IA EN DIRECTO */}
+        <div style={{
+          background: 'rgba(15, 23, 42, 0.85)',
+          borderRadius: '16px',
+          border: liveDiagnosis?.incident_detected ? '1.5px solid #ef4444' : '1px solid rgba(56, 189, 248, 0.25)',
+          padding: '16px',
+          boxShadow: '0 8px 30px rgba(0,0,0,0.4)'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '1.4rem' }}>🤖</span>
+              <div>
+                <strong style={{ fontSize: '0.95rem', color: '#f8fafc', display: 'block' }}>Centinela Autónomo Gemini IA</strong>
+                <small style={{ color: 'var(--text-muted)' }}>Reconocimiento de personas y convivencia escolar</small>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="button secondary small"
+                onClick={() => setAutoAudit(a => !a)}
+                style={{ borderColor: autoAudit ? '#10b981' : 'rgba(255,255,255,0.2)', color: autoAudit ? '#10b981' : '#94a3b8', fontSize: '0.78rem' }}
+                title="Monitorear continuamente en segundo plano"
+              >
+                {autoAudit ? '⚡ Auto-Auditoría: ON' : '⏸ Auto-Auditoría: PAUSA'}
+              </button>
+              <button
+                type="button"
+                className="button primary small"
+                onClick={() => handleAnalyzeCurrentScene(false)}
+                disabled={isAuditingFrame}
+                style={{ background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)', display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem' }}
+              >
+                {isAuditingFrame ? '⏳ Analizando...' : '👁️ Analizar Escena Ahora'}
+              </button>
+            </div>
+          </div>
+
+          {liveDiagnosis ? (
+            <div style={{ background: 'rgba(2, 6, 23, 0.6)', borderRadius: '12px', padding: '14px', border: liveDiagnosis.incident_detected ? '1px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.08)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
+                <span style={{ fontSize: '0.84rem', color: '#94a3b8' }}>
+                  👤 Personas reconocidas: <strong style={{ color: '#fff' }}>{liveDiagnosis.persons_count}</strong>
+                </span>
+                <span className={`fidelity-badge ${liveDiagnosis.confidence?.toLowerCase().includes('alta') ? 'fidelity-high' : 'fidelity-medium'}`}>
+                  {liveDiagnosis.confidence}
+                </span>
+              </div>
+
+              <p style={{ margin: '0 0 10px', fontSize: '0.86rem', color: '#e2e8f0', lineHeight: 1.5 }}>
+                {liveDiagnosis.persons_description || liveDiagnosis.description}
+              </p>
+
+              {liveDiagnosis.suggested_action && (
+                <div style={{ background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '8px', padding: '8px 10px', fontSize: '0.8rem', color: 'var(--accent-cyan)', marginBottom: '12px' }}>
+                  ⚖️ <strong>Ley 1620:</strong> {liveDiagnosis.suggested_action}
+                </div>
+              )}
+
+              {liveDiagnosis.whatsapp_link && (
+                <button
+                  type="button"
+                  className="button primary small"
+                  onClick={() => window.open(liveDiagnosis.whatsapp_link, '_blank')}
+                  style={{ width: '100%', justifyContent: 'center', background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)', fontWeight: 700, padding: '10px' }}
+                >
+                  📲 Notificar este Diagnóstico a WhatsApp Oficial
+                </button>
+              )}
+            </div>
+          ) : (
+            <div style={{ padding: '14px', background: 'rgba(2, 6, 23, 0.4)', borderRadius: '10px', fontSize: '0.82rem', color: '#94a3b8', textAlign: 'center' }}>
+              Toca <strong>"👁️ Analizar Escena Ahora"</strong> o inicia la transmisión para que el Motor Gemini IA reconozca a las personas y audite la convivencia en tiempo real.
+            </div>
+          )}
+
+          {auditToast && (
+            <div style={{
+              marginTop: '10px',
+              padding: '10px 14px',
+              borderRadius: '10px',
+              fontSize: '0.82rem',
+              background: auditToast.type === 'alert' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)',
+              border: auditToast.type === 'alert' ? '1px solid #ef4444' : '1px solid #10b981',
+              color: auditToast.type === 'alert' ? '#fca5a5' : '#6ee7b7',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '8px',
+              flexWrap: 'wrap'
+            }}>
+              <span>{auditToast.text}</span>
+              {auditToast.whatsapp_link && (
+                <button
+                  className="button primary small"
+                  onClick={() => window.open(auditToast.whatsapp_link, '_blank')}
+                  style={{ padding: '4px 10px', fontSize: '0.75rem', background: '#25D366', border: 'none' }}
+                >
+                  📲 Abrir WhatsApp
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
   )
 }
+
 
 /* =========================================================================
    NEXIA Vision Matrix — CCTV en Tiempo Real (Demo)

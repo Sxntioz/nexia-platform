@@ -1,3 +1,5 @@
+import re
+import urllib.parse
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
@@ -1813,4 +1815,112 @@ def manual_audit_live_camera(payload: dict, db: Session = Depends(get_db)):
         "incident_detected": False,
         "camera_label": cam.label,
         "message": res.get("description", "Convivencia pacífica observada por Gemini IA."),
+    }
+
+
+@api_router.post("/cctv/broadcast/analyze-frame", tags=["cctv-live"])
+async def analyze_broadcast_frame(
+    camera_id: str = Form(...),
+    frame: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    from app.services.gemini import analyze_live_frame_snapshot
+    from app.models import Camera, CCTVLiveAlert
+
+    cam = db.get(Camera, camera_id)
+    camera_label = cam.label if cam else f"Cámara {camera_id}"
+    location = cam.location if cam else "Instalaciones del Colegio"
+
+    image_bytes = await frame.read()
+    result = analyze_live_frame_snapshot(image_bytes, camera_label, location)
+
+    phone = _whatsapp_config.get("phone_number", "+573105551234")
+    incident_detected = bool(result.get("incident_detected", False))
+    incident_type = result.get("incident_type", "NORMAL")
+    title = result.get("title", "Convivencia Pacífica")
+    description = result.get("description", "Monitoreo en curso.")
+    severity = result.get("severity", "NINGUNA")
+    confidence = result.get("confidence", "Alta fidelidad")
+    suggested_action = result.get("suggested_action", "Continuar supervisión.")
+
+    msg, wa_link = format_whatsapp_alert_message(
+        camera_label=camera_label,
+        location=location,
+        incident_type=incident_type if incident_detected else "FIGHT",
+        title=title,
+        description=description,
+        confidence=confidence,
+        suggested_action=suggested_action,
+        phone_number=phone,
+    )
+
+    alert_record = None
+    if incident_detected:
+        alert_record = CCTVLiveAlert(
+            session_id="snapshot",
+            camera_id=camera_id,
+            camera_label=camera_label,
+            incident_type=incident_type,
+            severity=severity,
+            title=title,
+            description=description,
+            confidence=confidence,
+            suggested_action=suggested_action,
+            whatsapp_notified=bool(_whatsapp_config.get("auto_notify_alerts", True)),
+            whatsapp_recipient=phone,
+        )
+        db.add(alert_record)
+        db.commit()
+        db.refresh(alert_record)
+
+        # Broadcast immediately to global CCTV websocket
+        WebRTCSignalingManager.broadcast_to_room("global", {
+            "type": "live_ai_alert",
+            "alert": {
+                "id": alert_record.id,
+                "camera_id": camera_id,
+                "camera_label": camera_label,
+                "incident_type": incident_type,
+                "severity": severity,
+                "title": title,
+                "description": description,
+                "confidence": confidence,
+                "suggested_action": suggested_action,
+                "created_at": alert_record.created_at.isoformat(),
+                "whatsapp_notified": alert_record.whatsapp_notified,
+                "whatsapp_recipient": phone,
+                "whatsapp_link": wa_link,
+            }
+        })
+
+    return {
+        "status": "ok",
+        "camera_id": camera_id,
+        "camera_label": camera_label,
+        "location": location,
+        "persons_count": result.get("persons_count", 0),
+        "persons_description": result.get("persons_description", ""),
+        "scene_status": result.get("scene_status", "PACIFICA"),
+        "incident_detected": incident_detected,
+        "incident_type": incident_type,
+        "severity": severity,
+        "title": title,
+        "description": description,
+        "confidence": confidence,
+        "suggested_action": suggested_action,
+        "whatsapp_link": wa_link,
+        "whatsapp_phone": phone,
+        "alert": {
+            "id": alert_record.id if alert_record else None,
+            "camera_id": camera_id,
+            "camera_label": camera_label,
+            "incident_type": incident_type,
+            "severity": severity,
+            "title": title,
+            "description": description,
+            "confidence": confidence,
+            "suggested_action": suggested_action,
+            "created_at": datetime.now().isoformat(),
+            "whatsapp_link": wa_link,
+        } if incident_detected else None
     }
