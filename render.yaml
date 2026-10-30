@@ -13,3 +13,7 @@ services:
         value: production
       - key: CORS_ORIGINS
         value: "*"
+      - key: AWS_BUCKET_NAME
+        value: nexia-cctv-salones-santiago
+      - key: AWS_REGION
+        value: us-east-2

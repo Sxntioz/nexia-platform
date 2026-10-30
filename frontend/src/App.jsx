@@ -456,7 +456,7 @@ function Header({ user, theme, lang = 'es', onToggleTheme, onToggleLang, onLogou
                     style={{ background: 'rgba(56, 189, 248, 0.12)', color: '#38bdf8', fontWeight: 600 }}
                     onClick={() => handleNav('cctv_broadcast')}
                   >
-                    <Icon name="camera" size={17} /> <span>📱 Transmitir Celular (CAM Prueba Cel 1)</span>
+                    <Icon name="camera" size={17} /> <span>🔴 Transmitir en Vivo</span>
                   </button>
                   <button className="mobile-link mobile-admin-link" onClick={() => handleNav('admin_recordings')}>
                     <Icon name="film" size={17} /> <span>Depósito Grabaciones</span>
@@ -1016,19 +1016,18 @@ function Home({ user, lang = 'es' }) {
             </button>
           </div>
 
-          {/* Card: Transmisión Celular en Vivo */}
-          <div className="action-hub-card" style={{ borderColor: 'rgba(56, 189, 248, 0.4)', background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.08) 0%, rgba(15, 23, 42, 0.8) 100%)' }}>
+          {/* Card: Transmisión en Vivo */}
+          <div className="action-hub-card highlight-card">
             <div className="action-hub-icon" style={{ background: 'rgba(56, 189, 248, 0.15)', color: 'var(--accent-cyan)' }}>
               <Icon name="camera" size={24} />
             </div>
-            <h3>{lang === 'es' ? 'Transmitir Cámara Celular (CCTV)' : 'Live Mobile CCTV Broadcast'}</h3>
-            <p>{lang === 'es' ? 'Conecta la cámara de tu teléfono en tiempo real a la matriz CCTV escolar y audita con IA.' : 'Connect your phone camera as a live school CCTV stream.'}</p>
+            <h3>{lang === 'es' ? 'Transmitir en Vivo (CCTV)' : 'Live CCTV Broadcast'}</h3>
+            <p>{lang === 'es' ? 'Conecta una cámara en tiempo real a la matriz CCTV escolar y audita eventos con Gemini IA.' : 'Connect a camera in real-time to the school CCTV matrix and audit events with Gemini AI.'}</p>
             <button
               className="button primary full-width"
-              style={{ background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' }}
               onClick={() => navigate('cctv_broadcast')}
             >
-              📱 {lang === 'es' ? 'Abrir Transmisor Móvil' : 'Open Broadcaster'}
+              🔴 {lang === 'es' ? 'Transmitir en Vivo' : 'Live Broadcast'}
             </button>
           </div>
 
@@ -2078,7 +2077,7 @@ function AdminLayout({ children, active = 'reports', user }) {
             onClick={() => navigate('cctv_broadcast')}
             style={{ color: '#38bdf8' }}
           >
-            <Icon name="camera" /> 📱 Transmitir Celular
+            <Icon name="camera" /> 🔴 Transmitir en Vivo
           </button>
             <button className="button secondary small" onClick={() => navigate('admin_cameras')} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Icon name="camera" size={14} /> Gestionar Cámaras</button>
           <button
@@ -2137,7 +2136,7 @@ function AdminLayout({ children, active = 'reports', user }) {
             className={active === 'broadcast' ? 'active' : ''}
             onClick={() => navigate('cctv_broadcast')}
           >
-            <Icon name="camera" size={15} /> <span>Celular</span>
+            <Icon name="camera" size={15} /> <span>En Vivo</span>
           </button>
           <button
             className={active === 'recordings' ? 'active' : ''}
@@ -2358,13 +2357,35 @@ function LiveStreamSpotlight({ camera, session, isMuted }) {
     }
   }, [camera.id])
 
+  const [coverMode, setCoverMode] = useState(true)
   const feedUrl = `${API_BASE_URL}/cctv/live-feed/${camera.id}?t=${reloadNonce}`
+  const videoFit = coverMode ? 'cover' : 'contain'
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div className="live-stream-overlay-banner">
-        <span className="pulse-tag" />
-        <span>🔴 EN VIVO DESDE CELULAR · {camera.label} ({session?.duration_seconds || 0}s)</span>
+    <div style={{ position: 'relative', width: '100%', height: '100%', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+      <div className="live-stream-overlay-banner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '92%', maxWidth: '95%' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span className="pulse-tag" />
+          <span>🔴 EN VIVO · {camera.label} ({session?.duration_seconds || 0}s)</span>
+        </div>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setCoverMode(!coverMode); }}
+          style={{
+            background: 'rgba(15, 23, 42, 0.75)',
+            border: '1px solid rgba(56, 189, 248, 0.4)',
+            color: 'var(--accent-cyan)',
+            borderRadius: '6px',
+            padding: '2px 8px',
+            fontSize: '0.68rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+            backdropFilter: 'blur(4px)'
+          }}
+          title="Alternar entre modo panorámico horizontal 16:9 y ajuste completo"
+        >
+          {coverMode ? '🖥️ Panorámica' : '📱 Ajuste'}
+        </button>
       </div>
 
       {useFallback ? (
@@ -2376,7 +2397,7 @@ function LiveStreamSpotlight({ camera, session, isMuted }) {
           muted={isMuted}
           controls
           className="cctv-video-stream"
-          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+          style={{ width: '100%', height: '100%', objectFit: videoFit }}
         />
       ) : (
         <video
@@ -2386,7 +2407,7 @@ function LiveStreamSpotlight({ camera, session, isMuted }) {
           muted={isMuted}
           controls
           className="cctv-video-stream"
-          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+          style={{ width: '100%', height: '100%', objectFit: videoFit }}
         />
       )}
     </div>
@@ -2433,13 +2454,13 @@ function ConnectPhoneModal({ isOpen, onClose, cameras, selectedCam, liveStatus, 
         <div style={{ textAlign: 'left', marginBottom: '16px', paddingRight: '36px' }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.74rem', fontWeight: 800, color: 'var(--accent-cyan)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '6px' }}>
             <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: isStreaming ? '#ef4444' : 'var(--accent-cyan)', boxShadow: isStreaming ? '0 0 10px #ef4444' : 'none' }} />
-            CIRCUITO CERRADO · ENLACE MÓVIL EN TIEMPO REAL
+            CIRCUITO CERRADO · TRANSMISIÓN EN VIVO EN TIEMPO REAL
           </div>
           <h2 style={{ margin: '0 0 4px', fontSize: '1.45rem', fontWeight: 800 }}>
-            Enlazar Celular a {targetCam.label}
+            Transmitir en Vivo a {targetCam.label}
           </h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>
-            {targetCam.location ? `Área: ${targetCam.location} · ` : ''}Transmite video en directo desde la cámara de cualquier teléfono.
+            {targetCam.location ? `Área: ${targetCam.location} · ` : ''}Transmite video en directo hacia esta cámara del colegio en tiempo real.
           </p>
         </div>
 
@@ -2467,7 +2488,7 @@ function ConnectPhoneModal({ isOpen, onClose, cameras, selectedCam, liveStatus, 
           </div>
         ) : (
           <div style={{ background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '10px 14px', borderRadius: '12px', color: 'var(--accent-cyan)', fontSize: '0.85rem', margin: '10px 0' }}>
-            ⏳ Escanea el código con tu celular para transmitir en directo hacia <strong>{targetCam.label}</strong>.
+            ⏳ Escanea el código para transmitir en directo hacia <strong>{targetCam.label}</strong>.
           </div>
         )}
 
@@ -2603,10 +2624,10 @@ function CCTVBroadcaster({ user }) {
     setErrorMsg('')
     setSuccessInfo(null)
     try {
-      // 1. Notificar al backend el inicio de sesión
+      // 1. Notificar al backend el inicio de sesión con orientación
       const res = await apiRequest('/cctv/broadcast/start', {
         method: 'POST',
-        body: JSON.stringify({ camera_id: selectedCamId })
+        body: JSON.stringify({ camera_id: selectedCamId, aspect_mode: aspectMode })
       })
 
       const sessId = res.session_id
@@ -2738,6 +2759,42 @@ function CCTVBroadcaster({ user }) {
     setIsBroadcasting(false)
     setSessionId(null)
   }
+
+  const updateAspect = async (mode) => {
+    setAspectMode(mode)
+    if (sessionId) {
+      try {
+        await apiRequest('/cctv/broadcast/orientation', {
+          method: 'POST',
+          body: JSON.stringify({ session_id: sessionId, aspect_mode: mode })
+        })
+      } catch (_e) {}
+    }
+  }
+
+  // Detectar automáticamente giro físico del teléfono
+  useEffect(() => {
+    const handleOrientation = () => {
+      if (window.innerWidth > window.innerHeight) {
+        setAspectMode('landscape')
+      }
+    }
+    window.addEventListener('resize', handleOrientation)
+    return () => window.removeEventListener('resize', handleOrientation)
+  }, [])
+
+  // Finalizar sesión en segundo plano si el usuario cierra la ventana o sale
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (sessionId) {
+        try {
+          navigator.sendBeacon?.(`${API_BASE_URL}/cctv/broadcast/stop`, JSON.stringify({ session_id: sessionId }))
+        } catch (_e) {}
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [sessionId])
 
   const toggleCameraFacing = () => {
     setFacingMode(f => (f === 'environment' ? 'user' : 'environment'))
@@ -2874,7 +2931,7 @@ function CCTVBroadcaster({ user }) {
             <button
               type="button"
               className={`broadcaster-zoom-chip ${aspectMode === 'landscape' ? 'active' : ''}`}
-              onClick={() => setAspectMode('landscape')}
+              onClick={() => updateAspect('landscape')}
               title="Formato horizontal tipo monitor CCTV (16:9)"
             >
               🖥️ Horizontal
@@ -2882,7 +2939,7 @@ function CCTVBroadcaster({ user }) {
             <button
               type="button"
               className={`broadcaster-zoom-chip ${aspectMode === 'portrait' ? 'active' : ''}`}
-              onClick={() => setAspectMode('portrait')}
+              onClick={() => updateAspect('portrait')}
               title="Formato vertical tipo celular (9:16)"
             >
               📱 Vertical
@@ -3101,7 +3158,7 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
               onClick={() => setConnectModal(true)}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' }}
             >
-              <Icon name="camera" size={14} /> 📱 Enlazar Celular en Vivo
+              <Icon name="camera" size={14} /> 🔴 Transmitir en Vivo
             </button>
             <button
               className="button secondary small"
@@ -3119,7 +3176,7 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
           <div className="cctv-pills">
             {[
               { key: 'ALL', label: t.cctvAllFloors },
-              { key: 'CEL', label: '📱 Celular En Vivo' },
+              { key: 'CEL', label: '🔴 Cámaras en Vivo' },
               { key: '1', label: t.cctvFloor1 },
               { key: '2', label: t.cctvFloor2 },
               { key: '3', label: t.cctvFloor3 },
@@ -3218,7 +3275,7 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
                         </h3>
                         <p style={{ margin: '0 0 16px', color: '#94a3b8', fontSize: '0.85rem', lineHeight: 1.5 }}>
                           {selectedCam?.location ? `Ubicación: ${selectedCam.location}. ` : ''}
-                          Canal de circuito cerrado listo para recibir transmisión en tiempo real desde cualquier teléfono celular.
+                          Canal de circuito cerrado listo para recibir transmisión en tiempo real.
                         </p>
                         <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
                           <button
@@ -3226,7 +3283,7 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
                             onClick={() => setConnectModal(true)}
                             style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 18px', fontWeight: 700 }}
                           >
-                            <Icon name="camera" size={16} /> 📱 Enlazar Celular a esta Cámara
+                            <Icon name="camera" size={16} /> 🔴 Transmitir en Vivo a esta Cámara
                           </button>
                           <button
                             className="button secondary small"
@@ -3343,7 +3400,7 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
                     <div className="grid-cell-simulated">
                       <Icon name="video" size={28} />
                       <small style={{ marginTop: '4px' }}>{cam.label}</small>
-                      <span style={{ fontSize: '0.65rem', color: 'var(--accent-cyan)', marginTop: '2px' }}>📱 Clic para enlazar celular</span>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--accent-cyan)', marginTop: '2px' }}>🔴 Clic para transmitir en vivo</span>
                     </div>
                   )}
                   {aiOverlay && (
@@ -3649,7 +3706,7 @@ function AdminCameras({ user }) {
                         <button
                           className="button ghost small"
                           onClick={() => navigate('cctv_broadcast', { camera_id: c.id })}
-                          title="Transmitir desde celular a esta cámara"
+                          title="Transmitir en vivo a esta cámara"
                         >
                           📱 Transmitir
                         </button>

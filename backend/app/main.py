@@ -95,13 +95,13 @@ async def lifespan(_: FastAPI):
                 db.add(default_admin)
                 db.commit()
 
-            # Sincronizar grabaciones existentes de AWS S3 para el depósito
-            s3_recordings = [
-                ("CAM-303", "rec_627d7efa63a5424a88eefe41e43e40f4.mp4", "VID_20260904_121245.mp4", 1535736945, datetime(2026, 9, 5, 11, 30, 0), 600),
-                ("CAM-P1-RAMPA", "rec_8bcd2f9035694109b32f97d516005da9.mp4", "1000155377.mp4", 611471230, datetime(2026, 9, 12, 20, 12, 0), 480),
-                ("CAM-P1-COOP", "rec_dd3c7ccf175641bfb8a1305d2706b841.mp4", "CAMARA.mp4", 141171752, datetime(2026, 9, 12, 15, 20, 0), 600),
+            # Asegurar grabaciones base iniciales
+            base_recordings = [
+                ("CAM-303", "rec_993eb514efb444d597779580e248b46d.mp4", "VID_20260904_121245.mp4", 1535736945, datetime(2026, 9, 5, 11, 30, 0), 600),
+                ("CAM-P1-RAMPA", "rec_dd3c7ccf175641bfb8a1305d2706b841.mp4", "1000155377.mp4", 611471230, datetime(2026, 9, 12, 20, 12, 0), 480),
+                ("CAM-P1-COOP", "rec_b1f1871e818b4a2b90bc99f757bbec8e.mp4", "CAMARA.mp4", 141171752, datetime(2026, 9, 12, 15, 20, 0), 600),
             ]
-            for cam_ident, file_name, display_name, size, started_at, dur in s3_recordings:
+            for cam_ident, file_name, display_name, size, started_at, dur in base_recordings:
                 cam = db.query(Camera).filter(Camera.identifier == cam_ident).first()
                 if cam:
                     already = db.query(CameraRecording).filter(CameraRecording.stored_name == file_name).first()
@@ -116,6 +116,60 @@ async def lifespan(_: FastAPI):
                             duration_seconds=dur,
                         ))
             db.commit()
+
+            # Sincronizar dinámicamente todas las grabaciones existentes en AWS S3 para el depósito
+            try:
+                from app.services.s3 import is_s3_enabled, get_s3_client
+                if is_s3_enabled():
+                    client = get_s3_client()
+                    resp = client.list_objects_v2(Bucket=settings.aws_bucket_name)
+                    for item in resp.get("Contents", []):
+                        key = item["Key"]
+                        size = item["Size"]
+                        last_mod = item["LastModified"].replace(tzinfo=None)
+                        if size < 1024:
+                            continue
+
+                        already = db.query(CameraRecording).filter(CameraRecording.stored_name == key).first()
+                        if already:
+                            continue
+
+                        cam_ident = "CAM-303"
+                        if key.startswith("live_"):
+                            parts = key.split("_")
+                            if len(parts) >= 2:
+                                cam_ident = parts[1]
+                        elif "RAMPA" in key:
+                            cam_ident = "CAM-P1-RAMPA"
+                        elif "COOP" in key:
+                            cam_ident = "CAM-P1-COOP"
+
+                        cam = db.query(Camera).filter(Camera.identifier == cam_ident).first()
+                        if not cam:
+                            cam = db.query(Camera).filter(Camera.identifier == "CAM-303").first()
+                        if not cam:
+                            cam = db.query(Camera).first()
+
+                        if cam:
+                            mime = "video/webm" if key.endswith(".webm") else "video/mp4"
+                            dur = max(30, min(1800, int(size / 350000)))
+                            disp_name = (
+                                f"En Vivo - {cam.label} ({last_mod.strftime('%H:%M:%S')}).webm"
+                                if key.startswith("live_")
+                                else f"Depósito - {cam.label} ({key[:14]}).mp4"
+                            )
+                            db.add(CameraRecording(
+                                camera_id=cam.id,
+                                original_name=disp_name,
+                                stored_name=key,
+                                mime_type=mime,
+                                size_bytes=size,
+                                recording_started_at=last_mod,
+                                duration_seconds=dur,
+                            ))
+                    db.commit()
+            except Exception as e:
+                print("Aviso al sincronizar grabaciones de S3:", e)
 
             # Asegurar reporte estudiantil inicial si no existe ninguno
             if db.query(Report).count() == 0:

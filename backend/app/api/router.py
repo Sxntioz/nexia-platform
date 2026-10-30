@@ -1223,13 +1223,14 @@ def upload_manual_pdf(
 # --- TRANSMISIÓN EN VIVO CCTV DESDE CELULAR / WEBRTC & CHUNKS ---
 
 class LiveBroadcastSession:
-    def __init__(self, session_id: str, camera_id: str, recording_id: str, stored_name: str, camera_identifier: str, camera_label: str):
+    def __init__(self, session_id: str, camera_id: str, recording_id: str, stored_name: str, camera_identifier: str, camera_label: str, aspect_mode: str = "landscape"):
         self.session_id = session_id
         self.camera_id = camera_id
         self.recording_id = recording_id
         self.stored_name = stored_name
         self.camera_identifier = camera_identifier
         self.camera_label = camera_label
+        self.aspect_mode = aspect_mode
         self.started_at = datetime.now()
         self.last_chunk_at = datetime.now()
         self.total_bytes = 0
@@ -1286,6 +1287,7 @@ def get_live_status():
             "camera_identifier": s.camera_identifier,
             "camera_label": s.camera_label,
             "recording_id": s.recording_id,
+            "aspect_mode": getattr(s, "aspect_mode", "landscape"),
             "started_at": s.started_at.isoformat(),
             "duration_seconds": int((now - s.started_at).total_seconds()),
             "total_bytes": s.total_bytes,
@@ -1294,12 +1296,24 @@ def get_live_status():
     return result
 
 
+@api_router.post("/cctv/broadcast/orientation", tags=["cctv-live"])
+def update_broadcast_orientation(payload: dict):
+    session_id = payload.get("session_id")
+    aspect_mode = payload.get("aspect_mode", "landscape")
+    session = _active_broadcasts.get(session_id)
+    if session:
+        session.aspect_mode = aspect_mode
+        return {"status": "ok", "aspect_mode": aspect_mode}
+    return {"status": "not_found"}
+
+
 @api_router.post("/cctv/broadcast/start", tags=["cctv-live"])
 def start_broadcast(
     payload: dict | None = None,
     db: Session = Depends(get_db),
 ):
     camera_id = payload.get("camera_id") if payload else None
+    aspect_mode = payload.get("aspect_mode", "landscape") if payload else "landscape"
     camera = db.get(Camera, camera_id) if camera_id else None
     if not camera:
         camera = db.scalar(select(Camera).where(Camera.identifier == "CAM-CEL-1"))
@@ -1312,12 +1326,14 @@ def start_broadcast(
     existing_s_id = _camera_active_session.get(camera.id)
     if existing_s_id and existing_s_id in _active_broadcasts:
         s = _active_broadcasts[existing_s_id]
+        s.aspect_mode = aspect_mode
         return {
             "session_id": s.session_id,
             "recording_id": s.recording_id,
             "camera_id": camera.id,
             "camera_identifier": camera.identifier,
             "camera_label": camera.label,
+            "aspect_mode": s.aspect_mode,
             "is_resumed": True,
         }
 
@@ -1345,6 +1361,7 @@ def start_broadcast(
         stored_name=stored_name,
         camera_identifier=camera.identifier,
         camera_label=camera.label,
+        aspect_mode=aspect_mode,
     )
     _active_broadcasts[session_id] = session
     _camera_active_session[camera.id] = session_id
@@ -1355,6 +1372,7 @@ def start_broadcast(
         "camera_id": camera.id,
         "camera_identifier": camera.identifier,
         "camera_label": camera.label,
+        "aspect_mode": aspect_mode,
         "is_resumed": False,
     }
 
