@@ -306,7 +306,7 @@ function ThemeToggle({ theme, onToggle }) {
   )
 }
 
-function Header({ user, theme, lang = 'es', onToggleTheme, onToggleLang, onLogout, onOpenAuth }) {
+function Header({ user, theme, lang = 'es', onToggleTheme, onToggleLang, onLogout, onOpenAuth, activePage = 'home' }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const isAdmin = user && user.role === 'ADMIN'
   const t = translations[lang] || translations.es
@@ -395,6 +395,16 @@ function Header({ user, theme, lang = 'es', onToggleTheme, onToggleLang, onLogou
             🌐 {lang === 'es' ? 'EN' : 'ES'}
           </button>
           <ThemeToggle theme={theme} onToggle={onToggleTheme} />
+          {user && (
+            <div
+              className="user-avatar-badge"
+              style={{ width: '28px', height: '28px', fontSize: '0.75rem', cursor: 'pointer', background: user.role === 'ADMIN' ? 'linear-gradient(135deg, #0284c7, #2563eb)' : 'linear-gradient(135deg, #10b981, #059669)' }}
+              title={`${user.full_name} (${user.role})`}
+              onClick={() => setMobileMenuOpen(true)}
+            >
+              {user.full_name?.charAt(0) || 'U'}
+            </div>
+          )}
           <button
             className="mobile-menu-btn"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -410,6 +420,29 @@ function Header({ user, theme, lang = 'es', onToggleTheme, onToggleLang, onLogou
           </button>
         </div>
       </header>
+
+      {/* Barra de Navegación Rápida Móvil para Usuarios Normales */}
+      {!isAdmin && (
+        <nav className="user-mobile-tabs" aria-label="Navegación móvil">
+          <button className={activePage === 'home' ? 'active' : ''} onClick={() => handleNav('home')}>
+            <Icon name="home" size={13} /> <span>{t.navHome}</span>
+          </button>
+          <button className={activePage === 'report' ? 'active' : ''} onClick={handleCreateReport}>
+            <Icon name="file" size={13} /> <span>{t.navNewReport}</span>
+          </button>
+          <button className={activePage === 'track' ? 'active' : ''} onClick={() => handleNav('track')}>
+            <Icon name="search" size={13} /> <span>{t.navTrack}</span>
+          </button>
+          <button onClick={handleOpenManual}>
+            <Icon name="book" size={13} /> <span>{t.navHandbook}</span>
+          </button>
+          {user && (
+            <button onClick={onLogout} style={{ color: '#ef4444' }}>
+              <Icon name="signout" size={13} /> <span>Salir</span>
+            </button>
+          )}
+        </nav>
+      )}
 
       {/* Menú Desplegable Móvil fuera del <header> para no quedar atrapado en el backdrop-filter */}
       {mobileMenuOpen && (
@@ -2424,9 +2457,7 @@ function LiveStreamSpotlight({ camera, session, isMuted }) {
             {streamActive ? `⚡ ${realResolution || '1080p Full HD'} • P2P Directo` : '📡 Sincronizando HD...'}
           </span>
         </div>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); setCoverMode(!coverMode); }}
+        <span
           style={{
             background: 'rgba(15, 23, 42, 0.85)',
             border: '1px solid rgba(56, 189, 248, 0.4)',
@@ -2435,13 +2466,14 @@ function LiveStreamSpotlight({ camera, session, isMuted }) {
             padding: '3px 10px',
             fontSize: '0.72rem',
             fontWeight: 700,
-            cursor: 'pointer',
-            backdropFilter: 'blur(4px)'
+            backdropFilter: 'blur(4px)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px'
           }}
-          title="Alternar entre modo panorámico y ajuste nativo"
         >
-          {coverMode ? '🖥️ Panorámica' : '📱 Ajuste Nativo'}
-        </button>
+          🖥️ 16:9 Panorámica CCTV
+        </span>
       </div>
 
       {/* Video WebRTC Primario de Alta Definición (Siempre montado en el DOM) */}
@@ -2527,8 +2559,13 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
   const handleSave = async (e) => {
     e.preventDefault()
     setBusy(true)
+    let clean = phone.trim()
+    let digits = clean.replace(/[^\d]/g, '')
+    if (digits.length === 10 && digits.startsWith('3')) {
+      clean = '+57' + digits
+    }
     const newCfg = {
-      phone_number: phone.trim(),
+      phone_number: clean,
       auto_notify_alerts: autoNotify,
       coordinator_name: coordinator.trim()
     }
@@ -2553,7 +2590,10 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
   const handleTestWhatsApp = async () => {
     setBusy(true)
     setTestResult(null)
-    const cleanNum = phone.replace(/[^\d]/g, '')
+    let cleanNum = phone.replace(/[^\d]/g, '')
+    if (cleanNum.length === 10 && cleanNum.startsWith('3')) {
+      cleanNum = '57' + cleanNum
+    }
     const now = new Date()
     const testMsg = `🚨 *ALERTA EN VIVO — SISTEMA NEXIA IA* 🚨\n━━━━━━━━━━━━━━━━━━━━━\n📅 *Fecha:* ${now.toLocaleDateString()}\n⏰ *Hora:* ${now.toLocaleTimeString()}\n📍 *Lugar / Cámara:* Cámara Salón 201 (Verificación de Conexión)\n⚠️ *Hecho Detectado:* Enlace Directo WhatsApp Verificado\n🔍 *Fidelidad IA:* Alta fidelidad\n\n📝 *Detalle:* Se ha vinculado exitosamente esta línea de WhatsApp para recepción inmediata de reportes y alertas en tiempo real generadas por Gemini IA.\n\n📋 *Recomendación Ley 1620:* Línea directiva habilitada para actuación inmediata.\n\n🔗 *Ver Circuito CCTV en Vivo:*\nhttps://nexia-platform.vercel.app/#admin_cctv\n━━━━━━━━━━━━━━━━━━━━━\n_Notificación institucional generada por Motor NEXIA Vision IA_`
     const clientWaLink = `https://wa.me/${cleanNum}?text=${encodeURIComponent(testMsg)}`
@@ -2911,7 +2951,11 @@ function CCTVBroadcaster({ user }) {
   const [successInfo, setSuccessInfo] = useState(null)
   const [torchOn, setTorchOn] = useState(false)
   const [zoomLevel, setZoomLevel] = useState(1.0)
-  const [aspectMode, setAspectMode] = useState('portrait')
+  const [aspectMode] = useState('landscape') // Estricto Horizontal 16:9
+  const [isPhoneHorizontal, setIsPhoneHorizontal] = useState(() => {
+    if (typeof window === 'undefined') return true
+    return window.innerWidth > window.innerHeight || Boolean(window.screen?.orientation?.type?.includes('landscape'))
+  })
 
   // Estados de Auditoría y Reconocimiento IA en Tiempo Real
   const [autoAudit, setAutoAudit] = useState(true)
@@ -2958,9 +3002,9 @@ function CCTVBroadcaster({ user }) {
       try {
         setErrorMsg('')
         const qualityConstraints = {
-          '720p': { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
-          '1080p': { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } },
-          '4K': { width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 30 } }
+          '720p': { width: { ideal: 1280 }, height: { ideal: 720 }, aspectRatio: { ideal: 1.777777778 }, frameRate: { ideal: 30 } },
+          '1080p': { width: { ideal: 1920 }, height: { ideal: 1080 }, aspectRatio: { ideal: 1.777777778 }, frameRate: { ideal: 30 } },
+          '4K': { width: { ideal: 3840 }, height: { ideal: 2160 }, aspectRatio: { ideal: 1.777777778 }, frameRate: { ideal: 30 } }
         }
         const s = await navigator.mediaDevices.getUserMedia({
           video: {
@@ -3256,13 +3300,12 @@ function CCTVBroadcaster({ user }) {
     setSessionId(null)
   }
 
-  const updateAspect = async (mode) => {
-    setAspectMode(mode)
+  const updateAspect = async (mode = 'landscape') => {
     if (sessionId) {
       try {
         await apiRequest('/cctv/broadcast/orientation', {
           method: 'POST',
-          body: JSON.stringify({ session_id: sessionId, aspect_mode: mode })
+          body: JSON.stringify({ session_id: sessionId, aspect_mode: 'landscape' })
         })
       } catch (_e) {}
     }
@@ -3270,12 +3313,18 @@ function CCTVBroadcaster({ user }) {
 
   useEffect(() => {
     const handleOrientation = () => {
-      if (window.innerWidth > window.innerHeight) {
-        setAspectMode('landscape')
-      }
+      const horiz = window.innerWidth > window.innerHeight || Boolean(window.screen?.orientation?.type?.includes('landscape'))
+      setIsPhoneHorizontal(horiz)
     }
+    handleOrientation()
     window.addEventListener('resize', handleOrientation)
-    return () => window.removeEventListener('resize', handleOrientation)
+    window.addEventListener('orientationchange', handleOrientation)
+    window.screen?.orientation?.addEventListener?.('change', handleOrientation)
+    return () => {
+      window.removeEventListener('resize', handleOrientation)
+      window.removeEventListener('orientationchange', handleOrientation)
+      window.screen?.orientation?.removeEventListener?.('change', handleOrientation)
+    }
   }, [])
 
   useEffect(() => {
@@ -3439,23 +3488,21 @@ function CCTVBroadcaster({ user }) {
           </div>
 
           <div className="broadcaster-tool-group">
-            <span className="broadcaster-tool-label">📐 Modo:</span>
-            <button
-              type="button"
-              className={`broadcaster-zoom-chip ${aspectMode === 'landscape' ? 'active' : ''}`}
-              onClick={() => updateAspect('landscape')}
-              title="Formato horizontal tipo monitor CCTV (16:9)"
-            >
-              🖥️ Horizontal
-            </button>
-            <button
-              type="button"
-              className={`broadcaster-zoom-chip ${aspectMode === 'portrait' ? 'active' : ''}`}
-              onClick={() => updateAspect('portrait')}
-              title="Formato vertical tipo celular (9:16)"
-            >
-              📱 Vertical
-            </button>
+            <span className="broadcaster-tool-label">📐 Lente CCTV:</span>
+            <span style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              borderRadius: '20px',
+              fontSize: '0.8rem',
+              fontWeight: 700,
+              background: 'rgba(56, 189, 248, 0.15)',
+              border: '1px solid var(--accent-cyan)',
+              color: 'var(--accent-cyan)'
+            }}>
+              🖥️ 16:9 Horizontal Panorámica
+            </span>
           </div>
         </div>
 
@@ -3482,8 +3529,19 @@ function CCTVBroadcaster({ user }) {
           </div>
         </div>
 
-        {/* Viewfinder con la cámara en Alta Definición */}
-        <div className={`broadcaster-viewfinder-card ${aspectMode === 'portrait' ? 'portrait-frame' : 'landscape-frame'}`}>
+        {/* Hint interactivo cuando el celular se sostiene verticalmente */}
+        {!isPhoneHorizontal && (
+          <div className="broadcaster-turn-phone-hint">
+            <span className="turn-phone-icon">🔄</span>
+            <div>
+              <strong style={{ display: 'block', fontSize: '0.9rem' }}>Gira tu celular a posición horizontal</strong>
+              <small style={{ color: '#94a3b8' }}>Para activar la lente panorámica CCTV (16:9) en pantalla completa</small>
+            </div>
+          </div>
+        )}
+
+        {/* Viewfinder con la cámara en Widescreen Horizontal 16:9 */}
+        <div className={`broadcaster-viewfinder-card landscape-frame ${isPhoneHorizontal ? 'horizontal-device-active' : ''}`}>
           <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
             <video
               ref={videoPreviewRef}
@@ -3540,7 +3598,7 @@ function CCTVBroadcaster({ user }) {
           </div>
 
           <div style={{ position: 'absolute', bottom: '12px', left: '14px', zIndex: 10, fontSize: '0.78rem', color: '#fff', textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}>
-            <strong>{selectedCam?.label || 'CAM Prueba Cel 1'}</strong> • {qualityPreset.toUpperCase()} • {zoomLevel}x • {aspectMode === 'portrait' ? 'Vertical 9:16' : 'Horizontal 16:9'}
+            <strong>{selectedCam?.label || 'CAM Prueba Cel 1'}</strong> • {qualityPreset.toUpperCase()} • {zoomLevel}x • {isPhoneHorizontal ? '🟢 16:9 Pantalla Completa' : '📐 16:9 Panorámica (Gira Celular)'}
           </div>
         </div>
 
@@ -5892,6 +5950,7 @@ function App() {
         user={currentUser}
         theme={theme}
         lang={lang}
+        activePage={route.page}
         onToggleTheme={toggleTheme}
         onToggleLang={toggleLang}
         onLogout={handleLogout}
