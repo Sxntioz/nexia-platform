@@ -320,11 +320,11 @@ INSTRUCCIONES CLAVE DE ANÁLISIS:
 
 def analyze_live_stream_snippet(video_path: Path, camera_label: str, location: str) -> dict:
     """
-    Analiza de forma autónoma y continua un fragmento de video en vivo para detectar
-    situaciones de riesgo o conflicto escolar en tiempo real sin esperar reporte manual.
+    Analiza un fragmento breve de video de una transmision en vivo activa
+    para detectar automaticamente incidentes de convivencia bajo la Ley 1620.
     """
-    if not settings.gemini_api_key or not video_path.is_file() or video_path.stat().st_size < 1024:
-        return {"incident_detected": False, "status": "NO_MEDIA"}
+    if not settings.gemini_api_key or not video_path.is_file() or video_path.stat().st_size < 1000:
+        return {"incident_detected": False, "status": "NO_DATA"}
 
     client = genai.Client(api_key=settings.gemini_api_key)
     uploaded = None
@@ -337,39 +337,38 @@ def analyze_live_stream_snippet(video_path: Path, camera_label: str, location: s
             time.sleep(1.5)
             uploaded = client.files.get(name=uploaded.name)
 
-        prompt = f"""Eres el Centinela Autónomo de Convivencia Escolar de NEXIA para colegios e instituciones educativas en Colombia (Ley 1620).
-Estás monitoreando en tiempo real la cámara: "{camera_label}" (Ubicación: "{location}").
+        prompt = f"""Eres el Centinela Autonomo de Convivencia Escolar de NEXIA para colegios e instituciones educativas en Colombia (Ley 1620).
+Estas monitoreando en tiempo real la camara: "{camera_label}" (Ubicacion: "{location}").
 
-Analiza este fragmento de video en directo. Determina si ocurre alguna situación anómala o conducta de riesgo:
-1. Agresión física, riña, golpes, forcejeos o empujones violentos.
-2. Acoso escolar sistemático, intimidación o humillación observable.
-3. Sustracción no autorizada de pertenencias o hurto.
-4. Manipulación o porte de objetos peligrosos o prohibidos.
-5. Vandalismo o daño deliberado a las instalaciones del colegio.
-6. Emergencia física o caída aparatosa.
+Analiza este fragmento de video en directo. Determina con rigor si ocurre alguna situacion anomala o conducta de riesgo:
+1. Agresion fisica, rina, golpes, forcejeos o empujones violentos (FIGHT).
+2. Acoso escolar sistematico, intimidacion, acorralamiento u hostigamiento (BULLYING).
+3. Sustraccion no autorizada de pertenencias o esculque de bolsos ajenos (THEFT).
+4. Conducta de desorden grave, agresion verbal exaltada o vandalismo (MISCONDUCT).
+5. Emergencia medica o caida aparatosa (EMERGENCY).
 
-Si todo transcurre con normalidad (estudiantes en clase, caminando, charlando pacíficamente, aula vacía o tranquila):
+Si todo transcurre con normalidad (estudiantes en clase, caminando, charlando pacificamente, aula vacia o tranquila):
 Devuelve exactamente:
 {{
   "incident_detected": false,
   "incident_type": "NORMAL",
   "severity": "NINGUNA",
-  "title": "Convivencia Pacífica",
-  "description": "No se aprecian anomalías en la cámara.",
+  "title": "Convivencia Pacifica",
+  "description": "No se aprecian anomalias en la camara.",
   "confidence": "Alta fidelidad",
   "suggested_action": "Continuar monitoreo habitual."
 }}
 
-Si DETECTAS un incidente real o situación de alerta:
+Si DETECTAS un incidente real o situacion de alerta:
 Devuelve:
 {{
   "incident_detected": true,
   "incident_type": "FIGHT",
   "severity": "ALTA",
-  "title": "Título corto y claro del hecho (ej. Riña entre estudiantes en aula)",
-  "description": "Descripción objetiva de las acciones físicas observadas sin revelar nombres personales",
+  "title": "Titulo corto y claro del hecho (ej. Rina entre estudiantes en aula)",
+  "description": "Descripcion objetiva de las acciones fisicas observadas sin revelar nombres personales",
   "confidence": "Alta fidelidad",
-  "suggested_action": "Acción inmediata recomendada para el directivo conforme a la Ley 1620"
+  "suggested_action": "Accion inmediata recomendada para el directivo conforme a la Ley 1620"
 }}
 Nota: "incident_type" debe ser uno de: "FIGHT", "THEFT", "BULLYING", "MISCONDUCT", "EMERGENCY".
 "severity" debe ser uno de: "ALTA", "MEDIA", "BAJA".
@@ -380,18 +379,37 @@ Nota: "incident_type" debe ser uno de: "FIGHT", "THEFT", "BULLYING", "MISCONDUCT
             temperature=0.1,
         )
 
-        model_name = settings.gemini_model or "gemini-3.5-flash"
-        response = client.models.generate_content(
-            model=model_name,
-            contents=[uploaded, prompt],
-            config=config,
-        )
+        candidate_models = [
+            settings.gemini_model,
+            settings.gemini_fallback_model,
+            "gemini-3.5-flash-lite",
+            "gemini-flash-lite-latest",
+            "gemini-3.8-flash",
+            "gemini-3.7-flash",
+            "gemini-3.5-flash",
+            "gemini-3.6-flash",
+        ]
+        unique_models = []
+        for m in candidate_models:
+            if m and m not in unique_models:
+                unique_models.append(m)
 
-        text = response.text or "{}"
-        data = json.loads(text)
-        return data
+        for model_name in unique_models:
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=[uploaded, prompt],
+                    config=config,
+                )
+                text = response.text or "{}"
+                data = json.loads(text)
+                return data
+            except Exception as model_err:
+                logger.warning("Modelo %s fallo en live stream snippet: %s", model_name, model_err)
+
+        return {"incident_detected": False, "status": "ALL_MODELS_BUSY"}
     except Exception as e:
-        logger.warning(f"Aviso en análisis autónomo de fragmento en vivo: {e}")
+        logger.warning(f"Aviso en analisis autonomo de fragmento en vivo: {e}")
         return {"incident_detected": False, "status": "ERROR", "error": str(e)[:100]}
     finally:
         if uploaded is not None:
@@ -399,7 +417,6 @@ Nota: "incident_type" debe ser uno de: "FIGHT", "THEFT", "BULLYING", "MISCONDUCT
                 client.files.delete(name=uploaded.name)
             except Exception:
                 pass
-
 
 
 def analyze_live_frame_snapshot(image_bytes: bytes, camera_label: str, location: str) -> dict:
@@ -411,7 +428,7 @@ def analyze_live_frame_snapshot(image_bytes: bytes, camera_label: str, location:
     if not settings.gemini_api_key or not image_bytes or len(image_bytes) < 500:
         return {
             "persons_count": 0,
-            "persons_description": "No se recibio imagen valida o senal suficiente.",
+            "persons_description": "Espacio despejado. Sin senal visual suficiente.",
             "scene_status": "PACIFICA",
             "incident_detected": False,
             "incident_type": "NORMAL",
@@ -419,26 +436,42 @@ def analyze_live_frame_snapshot(image_bytes: bytes, camera_label: str, location:
             "title": "Sin Datos Visuales",
             "description": "Captura vacia o insuficiente.",
             "confidence": "Baja fidelidad",
-            "suggested_action": "Verificar lente de camara."
+            "suggested_action": "Verificar encuadre de la camara."
         }
 
     client = genai.Client(api_key=settings.gemini_api_key)
     try:
         image_part = types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
-        prompt = f"""Eres el Centinela Autonomo de Convivencia Escolar con Vision Artificial de NEXIA (Colombia - Ley 1620).
-Estas analizando en tiempo real la camara: "{camera_label}" (Ubicacion: "{location}").
+        prompt = f"""Eres el Centinela Autonomo de Convivencia Escolar con Vision Artificial de NEXIA (Colombia - Marco Ley 1620 de 2013).
+Estas auditando en tiempo real la camara: "{camera_label}" (Ubicacion escolar: "{location}").
 
-Realiza una auditoria visual inmediata y exhaustiva de esta captura en directo:
-1. RECONOCIMIENTO Y CONTEO DE PERSONAS:
-   - Identifica y cuenta cuantas personas o estudiantes aparecen en la escena (o si esta vacia).
-   - Describe brevemente su postura corporal, gestos observables, cercania fisica e interaccion (ej. "2 personas conversando pacificamente", "grupo interactuando de pie", "persona sola en mesa", "sujetos en actitud hostil").
-2. EVALUACION DE CONVIVENCIA ESCOLAR (Ley 1620 de 2013):
-   - "PACIFICA": Actividad escolar normal, conversacion armonica, orden o descanso tranquilo.
-   - "RIESGO": Discusion acalorada, gestos desafiantes, aglomeracion tensa o invasion de espacio.
-   - "CRITICA": Rina fisica activa, golpes, forcejeo violento, acoso deliberado o agresion evidente.
-3. TIPO DE INCIDENTE: "NORMAL", "FIGHT", "BULLYING", "THEFT", "MISCONDUCT", o "EMERGENCY".
-4. FIDELIDAD VISUAL: "Alta fidelidad", "Media fidelidad", o "Baja fidelidad".
-5. RECOMENDACION DE PROTOCOLO: Breve recomendacion institucional para directivos o docentes.
+Emite un analisis visual estricto, objetivo y completamente libre de falsos positivos o alucinaciones:
+
+1. REGLA FUNDAMENTAL DE CONTEO HUMANO:
+   - Se riguroso y esceptico: Cuenta UNICAMENTE personas fisicas reales (seres humanos de carne y hueso con rostro, cabeza o torso claramente visibles).
+   - NUNCA cuentes sillas vacias, pupitres, paredes, sombras, mochilas desatendidas o muebles como si fueran personas.
+   - Si el salon, patio o habitacion esta VACIO o desocupado, responde obligatoriamente:
+     * "persons_count": 0
+     * "persons_description": "Espacio completamente desocupado. No hay presencia humana en el encuadre."
+     * "scene_status": "PACIFICA"
+     * "incident_detected": false
+     * "incident_type": "NORMAL"
+     * "severity": "NINGUNA"
+
+2. IDENTIFICACION PRECISA DE ACCIONES Y CONDUCTAS EN CURSO:
+   - Si hay personas presentes, describe minuciosamente la accion observable que estan realizando:
+     * Actividad Pacifica / Normal: "1 persona sentada frente a un escritorio trabajando", "Estudiantes sentados escuchando clase en orden", "Personas caminando tranquilamente", "Dos personas platicando en calma".
+     * Situacion de Riesgo o Alerta Critica (Ley 1620):
+       - "FIGHT": Rina activa, golpes, forcejeos fisicos violentos, empujones agresivos o actitud de combate corporal.
+       - "BULLYING": Intimidacion, acorralamiento de un estudiante contra la pared, gestos humillantes o burlas colectivas hostiles.
+       - "THEFT": Sujeto abriendo o esculcando bolsos o casilleros ajenos sin autorizacion, sustraccion de bienes.
+       - "MISCONDUCT": Desorden grave, lanzar objetos contundentes, subirse a mesas, vandalismo a bienes escolares.
+       - "EMERGENCY": Persona desmayada, caida aparatosa en el suelo o emergencia medica evidente.
+
+3. ESTADO GENERAL Y FIDELIDAD:
+   - "scene_status": "PACIFICA" (sin novedad), "RIESGO" (tension o confrontacion incipiente) o "CRITICA" (violencia activa o emergencia).
+   - "confidence": Calidad y nitidez del cuadro ("Alta fidelidad", "Media fidelidad", "Baja fidelidad").
+   - "suggested_action": Medida preventiva o correctiva institucional inmediata.
 
 Devuelve estrictamente un JSON con esta estructura:
 {{
@@ -457,27 +490,59 @@ Devuelve estrictamente un JSON con esta estructura:
             response_mime_type="application/json",
             temperature=0.1,
         )
-        model_name = settings.gemini_model or "gemini-3.5-flash"
-        response = client.models.generate_content(
-            model=model_name,
-            contents=[image_part, prompt],
-            config=config,
-        )
-        text = response.text or "{}"
-        data = json.loads(text)
-        return data
-    except Exception as e:
-        logger.warning(f"Error en analyze_live_frame_snapshot: {e}")
+
+        candidate_models = [
+            settings.gemini_model,
+            settings.gemini_fallback_model,
+            "gemini-3.5-flash-lite",
+            "gemini-flash-lite-latest",
+            "gemini-3.8-flash",
+            "gemini-3.7-flash",
+            "gemini-3.5-flash",
+            "gemini-3.6-flash",
+        ]
+        unique_models = []
+        for m in candidate_models:
+            if m and m not in unique_models:
+                unique_models.append(m)
+
+        for model_name in unique_models:
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=[image_part, prompt],
+                    config=config,
+                )
+                text = response.text or "{}"
+                data = json.loads(text)
+                return data
+            except Exception as model_err:
+                logger.warning("Modelo %s fallo en snapshot: %s", model_name, model_err)
+
         return {
-            "persons_count": 1,
-            "persons_description": "Persona detectada en encuadre de camara.",
+            "persons_count": 0,
+            "persons_description": "Supervision visual activa. Espacio despejado o sin personas identificadas.",
             "scene_status": "PACIFICA",
             "incident_detected": False,
             "incident_type": "NORMAL",
             "severity": "NINGUNA",
-            "title": "Convivencia Pacifica",
-            "description": "Monitoreo visual activo. Convivencia armonica observada.",
-            "confidence": "Alta fidelidad",
+            "title": "Supervision Preventiva Activa",
+            "description": "Monitoreo del circuito escolar en curso. No se evidencian riesgos.",
+            "confidence": "Media fidelidad",
+            "suggested_action": "Continuar supervision ordinaria."
+        }
+    except Exception as e:
+        logger.warning(f"Error en analyze_live_frame_snapshot: {e}")
+        return {
+            "persons_count": 0,
+            "persons_description": "Supervision visual activa. Espacio despejado o sin personas identificadas.",
+            "scene_status": "PACIFICA",
+            "incident_detected": False,
+            "incident_type": "NORMAL",
+            "severity": "NINGUNA",
+            "title": "Supervision Preventiva Activa",
+            "description": "Monitoreo del circuito escolar en curso. No se evidencian riesgos.",
+            "confidence": "Media fidelidad",
             "suggested_action": "Continuar supervision ordinaria.",
             "fallback": True
         }

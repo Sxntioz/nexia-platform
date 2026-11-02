@@ -2551,14 +2551,23 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
   })
   const [autoNotify, setAutoNotify] = useState(config?.auto_notify_alerts ?? true)
   const [coordinator, setCoordinator] = useState(config?.coordinator_name || 'Coordinador de Convivencia')
+  const [apiKey, setApiKey] = useState(() => {
+    try {
+      const local = localStorage.getItem('nexia_whatsapp_config')
+      if (local) return JSON.parse(local).callmebot_api_key || ''
+    } catch (_e) {}
+    return config?.callmebot_api_key || ''
+  })
   const [testResult, setTestResult] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [showKeyGuide, setShowKeyGuide] = useState(false)
 
   useEffect(() => {
     if (config) {
       setPhone(config.phone_number || '+573145819221')
       setAutoNotify(config.auto_notify_alerts ?? true)
       setCoordinator(config.coordinator_name || 'Coordinador de Convivencia')
+      if (config.callmebot_api_key) setApiKey(config.callmebot_api_key)
     }
   }, [config, isOpen])
 
@@ -2575,7 +2584,8 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
     const newCfg = {
       phone_number: clean,
       auto_notify_alerts: autoNotify,
-      coordinator_name: coordinator.trim()
+      coordinator_name: coordinator.trim(),
+      callmebot_api_key: apiKey.trim()
     }
     try {
       localStorage.setItem('nexia_whatsapp_config', JSON.stringify(newCfg))
@@ -2588,7 +2598,7 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
         body: JSON.stringify(newCfg)
       })
     } catch (_err) {
-      // Guardado local permanente ya completado
+      // Guardado local completado
     } finally {
       setBusy(false)
       onClose()
@@ -2603,21 +2613,38 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
       cleanNum = '57' + cleanNum
     }
     const now = new Date()
-    const testMsg = `🚨 *ALERTA EN VIVO — SISTEMA NEXIA IA* 🚨\n━━━━━━━━━━━━━━━━━━━━━\n📅 *Fecha:* ${now.toLocaleDateString()}\n⏰ *Hora:* ${now.toLocaleTimeString()}\n📍 *Lugar / Cámara:* Cámara Salón 201 (Verificación de Conexión)\n⚠️ *Hecho Detectado:* Enlace Directo WhatsApp Verificado\n🔍 *Fidelidad IA:* Alta fidelidad\n\n📝 *Detalle:* Se ha vinculado exitosamente esta línea de WhatsApp para recepción inmediata de reportes y alertas en tiempo real generadas por Gemini IA.\n\n📋 *Recomendación Ley 1620:* Línea directiva habilitada para actuación inmediata.\n\n🔗 *Ver Circuito CCTV en Vivo:*\nhttps://nexia-platform.vercel.app/#admin_cctv\n━━━━━━━━━━━━━━━━━━━━━\n_Notificación institucional generada por Motor NEXIA Vision IA_`
+    const testMsg = `🚨 *ALERTA EN VIVO — SISTEMA NEXIA IA* 🚨\n━━━━━━━━━━━━━━━━━━━━━\n📅 *Fecha:* ${now.toLocaleDateString()}\n⏰ *Hora:* ${now.toLocaleTimeString()}\n📍 *Lugar / Cámara:* Cámara Salón 201 (Verificación Automática)\n⚠️ *Hecho Detectado:* Enlace Directo WhatsApp Verificado\n🔍 *Fidelidad IA:* Alta fidelidad\n\n📝 *Detalle:* Se ha vinculado exitosamente esta línea de WhatsApp para recepción inmediata y automática de reportes y alertas en tiempo real generadas por Gemini IA.\n\n📋 *Recomendación Ley 1620:* Línea directiva habilitada para actuación inmediata.\n\n🔗 *Ver Circuito CCTV en Vivo:*\nhttps://nexia-platform.vercel.app/#admin_cctv\n━━━━━━━━━━━━━━━━━━━━━\n_Notificación institucional generada por Motor NEXIA Vision IA_`
     const clientWaLink = `https://wa.me/${cleanNum}?text=${encodeURIComponent(testMsg)}`
     
-    // Abrir WhatsApp inmediatamente sin demoras de red
-    window.open(clientWaLink, '_blank')
-    setTestResult({ whatsapp_link: clientWaLink })
-
     try {
       const res = await apiRequest('/cctv/whatsapp-test', {
         method: 'POST',
-        body: JSON.stringify({ phone_number: phone, camera_label: 'Cámara Salón 201' })
+        body: JSON.stringify({
+          phone_number: cleanNum.startsWith('57') ? '+' + cleanNum : phone,
+          camera_label: 'Cámara Salón 201',
+          callmebot_api_key: apiKey.trim()
+        })
       })
-      if (res?.whatsapp_link) setTestResult(res)
+
+      if (res?.auto_dispatch?.success) {
+        setTestResult({
+          type: 'success',
+          text: `🚀 ¡Mensaje enviado automáticamente a WhatsApp (+${cleanNum}) sin necesidad de abrir el chat!`
+        })
+      } else {
+        // Fallback a enlace nativo si aún no tiene API Key configurada
+        window.open(clientWaLink, '_blank')
+        setTestResult({
+          type: 'info',
+          text: `📲 Se abrió WhatsApp con el reporte. ${res?.auto_dispatch?.detail || 'Para que se envíe 100% solo sin abrir chats, ingresa tu API Key gratuita de CallMeBot abajo.'}`
+        })
+      }
     } catch (_e) {
-      // El enlace directo ya abrió WhatsApp exitosamente
+      window.open(clientWaLink, '_blank')
+      setTestResult({
+        type: 'info',
+        text: '📲 Se abrió WhatsApp con el mensaje estructurado de prueba.'
+      })
     } finally {
       setBusy(false)
     }
@@ -2628,7 +2655,7 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
       <div
         className="modal-dialog"
         onClick={e => e.stopPropagation()}
-        style={{ maxWidth: '520px', background: 'rgba(15, 23, 42, 0.98)', border: '1px solid rgba(37, 211, 102, 0.4)', borderRadius: '20px', padding: '26px' }}
+        style={{ maxWidth: '540px', background: 'rgba(15, 23, 42, 0.98)', border: '1px solid rgba(37, 211, 102, 0.4)', borderRadius: '20px', padding: '26px' }}
       >
         <button className="auth-close-btn" onClick={onClose} aria-label="Cerrar modal">
           <Icon name="close" size={18} />
@@ -2637,18 +2664,18 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
           <span style={{ fontSize: '1.8rem' }}>📲</span>
           <div>
-            <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800 }}>Enlace de Alertas WhatsApp IA</h2>
-            <small style={{ color: 'var(--text-muted)' }}>Notificaciones inmediatas a directivos de convivencia</small>
+            <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800 }}>Enlace y Envío Automático WhatsApp IA</h2>
+            <small style={{ color: 'var(--text-muted)' }}>Notificaciones automáticas e inmediatas a directivos</small>
           </div>
         </div>
 
-        <p style={{ fontSize: '0.86rem', color: '#94a3b8', lineHeight: 1.5, margin: '10px 0 16px' }}>
-          Configura la línea directa a la cual el Motor Gemini IA enviará notificaciones instantáneas (con fecha, hora, cámara, tipo de hecho y recomendación de Ley 1620) al detectar anomalías durante la transmisión.
+        <p style={{ fontSize: '0.86rem', color: '#94a3b8', lineHeight: 1.5, margin: '8px 0 14px' }}>
+          Configura la línea oficial a la cual el Motor Gemini IA enviará alertas instantáneas (con fecha, hora, cámara, diagnóstico y recomendación de Ley 1620) al detectar anomalías durante la transmisión.
         </p>
 
-        <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <div>
-            <label style={{ fontSize: '0.8rem', color: '#e2e8f0', fontWeight: 600, display: 'block', marginBottom: '6px' }}>
+            <label style={{ fontSize: '0.8rem', color: '#e2e8f0', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
               Número de Teléfono / WhatsApp Institucional:
             </label>
             <input
@@ -2659,13 +2686,13 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
               required
               style={{ width: '100%', padding: '10px 12px', background: 'rgba(30, 41, 59, 0.8)', border: '1px solid rgba(255, 255, 255, 0.15)', borderRadius: '10px', color: '#fff', fontSize: '0.95rem', fontFamily: 'monospace' }}
             />
-            <small style={{ color: 'var(--text-muted)', fontSize: '0.74rem', marginTop: '4px', display: 'block' }}>
-              Incluye el código de país (ej. +57 para Colombia).
+            <small style={{ color: 'var(--text-muted)', fontSize: '0.74rem', marginTop: '3px', display: 'block' }}>
+              Número con indicativo de país (ej. +573145819221).
             </small>
           </div>
 
           <div>
-            <label style={{ fontSize: '0.8rem', color: '#e2e8f0', fontWeight: 600, display: 'block', marginBottom: '6px' }}>
+            <label style={{ fontSize: '0.8rem', color: '#e2e8f0', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
               Cargo o Responsable Receptor:
             </label>
             <input
@@ -2677,7 +2704,40 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
             />
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(30, 41, 59, 0.5)', padding: '12px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+          {/* Clave API para Envío 100% Automático sin abrir chats */}
+          <div style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(56, 189, 248, 0.25)', padding: '12px', borderRadius: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <label style={{ fontSize: '0.8rem', color: '#38bdf8', fontWeight: 700, margin: 0 }}>
+                ⚡ Clave API CallMeBot (Para Envío 100% Automático):
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowKeyGuide(g => !g)}
+                style={{ background: 'none', border: 'none', color: '#38bdf8', fontSize: '0.72rem', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
+              >
+                {showKeyGuide ? 'Ocultar guía' : '¿Cómo obtenerla gratis?'}
+              </button>
+            </div>
+            <input
+              type="text"
+              value={apiKey}
+              onChange={e => setApiKey(e.target.value)}
+              placeholder="Pega aquí tu API Key (ej. 839201)"
+              style={{ width: '100%', padding: '9px 12px', background: 'rgba(15, 23, 42, 0.9)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '8px', color: '#fff', fontSize: '0.9rem', fontFamily: 'monospace' }}
+            />
+            {showKeyGuide && (
+              <div style={{ marginTop: '8px', background: 'rgba(15, 23, 42, 0.85)', padding: '10px', borderRadius: '8px', fontSize: '0.76rem', color: '#94a3b8', lineHeight: 1.45 }}>
+                <p style={{ margin: '0 0 4px', fontWeight: 700, color: '#38bdf8' }}>Obtener tu clave gratuita en 15 segundos:</p>
+                <ol style={{ margin: 0, paddingLeft: '18px' }}>
+                  <li>Abre WhatsApp y envía el mensaje: <code>I allow callmebot to send me messages</code> al número <strong>+34 644 44 49 46</strong>.</li>
+                  <li>El bot responderá de inmediato con tu API Key numérica (ej. 839201).</li>
+                  <li>Pégala en esta casilla. ¡Listo! La IA enviará los reportes sola a tu celular.</li>
+                </ol>
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(30, 41, 59, 0.5)', padding: '10px 12px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
             <input
               type="checkbox"
               id="autoNotify"
@@ -2685,18 +2745,26 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
               onChange={e => setAutoNotify(e.target.checked)}
               style={{ width: '18px', height: '18px', cursor: 'pointer' }}
             />
-            <label htmlFor="autoNotify" style={{ fontSize: '0.84rem', color: '#f8fafc', cursor: 'pointer', margin: 0 }}>
-              <strong>Centinela Autónomo:</strong> Analizar continuamente las transmisiones activas y disparar alertas inmediatas.
+            <label htmlFor="autoNotify" style={{ fontSize: '0.82rem', color: '#f8fafc', cursor: 'pointer', margin: 0 }}>
+              <strong>Centinela Autónomo:</strong> Disparar y despachar alertas a WhatsApp automáticamente en cuanto la IA detecte riñas o riesgos.
             </label>
           </div>
 
           {testResult && (
-            <div style={{ background: 'rgba(37, 211, 102, 0.15)', border: '1px solid #25D366', padding: '10px 14px', borderRadius: '10px', color: '#25D366', fontSize: '0.82rem' }}>
-              ✅ Enlace probado correctamente. Se abrió la ventana de WhatsApp con el mensaje estructurado de prueba.
+            <div style={{
+              background: testResult.type === 'success' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(56, 189, 248, 0.15)',
+              border: testResult.type === 'success' ? '1px solid #10b981' : '1px solid #38bdf8',
+              padding: '10px 14px',
+              borderRadius: '10px',
+              color: testResult.type === 'success' ? '#34d399' : '#38bdf8',
+              fontSize: '0.82rem',
+              lineHeight: 1.4
+            }}>
+              {testResult.text}
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: '10px', marginTop: '6px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '10px', marginTop: '4px', flexWrap: 'wrap' }}>
             <button
               type="button"
               className="button secondary"
@@ -2704,7 +2772,7 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
               disabled={busy || !phone.trim()}
               style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px', borderColor: '#25D366', color: '#25D366' }}
             >
-              🧪 Probar Enlace WhatsApp
+              {apiKey.trim() ? '⚡ Probar Envío Automático' : '🧪 Probar Enlace WhatsApp'}
             </button>
             <button
               type="submit"
@@ -2712,7 +2780,7 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
               disabled={busy}
               style={{ flex: 1, justifyContent: 'center', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)' }}
             >
-              {busy ? 'Guardando...' : '💾 Guardar Enlace'}
+              {busy ? 'Guardando...' : '💾 Guardar Configuración'}
             </button>
           </div>
         </form>
@@ -3060,13 +3128,27 @@ function CCTVBroadcaster({ user }) {
 
     setIsAuditingFrame(true)
     try {
+      const vw = vid.videoWidth || 1280
+      const vh = vid.videoHeight || 720
+      const maxDim = 1280
+      let targetW = vw
+      let targetH = vh
+      if (targetW > maxDim || targetH > maxDim) {
+        if (targetW >= targetH) {
+          targetH = Math.round((vh / vw) * maxDim)
+          targetW = maxDim
+        } else {
+          targetW = Math.round((vw / vh) * maxDim)
+          targetH = maxDim
+        }
+      }
       const canvas = document.createElement('canvas')
-      canvas.width = Math.min(vid.videoWidth || 1280, 1280)
-      canvas.height = Math.min(vid.videoHeight || 720, 720)
+      canvas.width = targetW
+      canvas.height = targetH
       const ctx = canvas.getContext('2d')
-      ctx.drawImage(vid, 0, 0, canvas.width, canvas.height)
+      ctx.drawImage(vid, 0, 0, targetW, targetH)
 
-      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85))
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92))
       if (!blob) return
 
       const fd = new FormData()

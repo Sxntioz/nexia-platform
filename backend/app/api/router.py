@@ -1295,10 +1295,96 @@ webrtc_manager = WebRTCSignalingManager()
 
 # --- CONFIGURACIÓN DE ALERTAS WHATSAPP Y CENTINELA IA ---
 _whatsapp_config = {
-    "phone_number": "+573105551234",
+    "phone_number": "+573145819221",
     "auto_notify_alerts": True,
     "coordinator_name": "Coordinador de Convivencia",
+    "callmebot_api_key": "",
+    "webhook_url": "",
 }
+
+async def dispatch_automated_whatsapp(
+    phone_number: str,
+    message_text: str,
+    apikey: str | None = None,
+    webhook_url: str | None = None,
+) -> dict:
+    """
+    Despacha el mensaje de alerta automáticamente al WhatsApp del directivo
+    usando APIs directas (CallMeBot / Webhooks / Gateways).
+    """
+    import httpx, urllib.parse
+    clean_digits = "".join(filter(str.isdigit, phone_number))
+    if len(clean_digits) == 10 and clean_digits.startswith("3"):
+        clean_digits = "57" + clean_digits
+
+    # 1. Si hay Webhook institucional configurado
+    target_webhook = webhook_url or _whatsapp_config.get("webhook_url") or os.getenv("WHATSAPP_WEBHOOK_URL")
+    if target_webhook and target_webhook.startswith("http"):
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                res = await client.post(
+                    target_webhook,
+                    json={
+                        "phone": clean_digits,
+                        "recipient": f"+{clean_digits}",
+                        "message": message_text,
+                        "alert_type": "NEXIA_VISION_AI",
+                    },
+                )
+                if res.status_code in (200, 201, 202):
+                    return {
+                        "success": True,
+                        "provider": "WEBHOOK",
+                        "status_code": res.status_code,
+                        "detail": f"Mensaje despachado automáticamente vía Webhook Institucional a +{clean_digits}.",
+                    }
+        except Exception as e:
+            logger.warning(f"Error despachando vía Webhook: {e}")
+
+    # 2. Si hay API Key de CallMeBot configurada
+    bot_key = apikey or _whatsapp_config.get("callmebot_api_key") or os.getenv("CALLMEBOT_API_KEY")
+    if bot_key:
+        try:
+            target_phone = f"+{clean_digits}" if not clean_digits.startswith("+") else clean_digits
+            url = (
+                f"https://api.callmebot.com/whatsapp.php"
+                f"?phone={urllib.parse.quote(target_phone)}"
+                f"&text={urllib.parse.quote(message_text)}"
+                f"&apikey={urllib.parse.quote(str(bot_key).strip())}"
+            )
+            async with httpx.AsyncClient(timeout=12.0) as client:
+                res = await client.get(url)
+                if "error" not in res.text.lower() and res.status_code == 200:
+                    return {
+                        "success": True,
+                        "provider": "CALLMEBOT_API",
+                        "status_code": res.status_code,
+                        "detail": f"¡Mensaje enviado automáticamente a WhatsApp (+{clean_digits}) sin abrir el chat!",
+                    }
+                else:
+                    logger.warning(f"CallMeBot respuesta: {res.text[:200]}")
+                    return {
+                        "success": False,
+                        "provider": "CALLMEBOT_API",
+                        "status_code": res.status_code,
+                        "error": res.text[:200],
+                        "detail": "CallMeBot rechazó la solicitud. Verifica el número y tu API Key.",
+                    }
+        except Exception as e:
+            logger.warning(f"Error despachando vía CallMeBot: {e}")
+            return {
+                "success": False,
+                "provider": "CALLMEBOT_API",
+                "error": str(e),
+                "detail": f"Error de conexión con CallMeBot: {str(e)[:100]}",
+            }
+
+    # Si aún no tiene clave configurada
+    return {
+        "success": False,
+        "provider": "NONE",
+        "detail": "Para envío automático directo sin abrir WhatsApp, ingresa tu API Key gratuita de CallMeBot o la URL de tu Webhook institucional.",
+    }
 
 TYPE_ALERT_LABELS = {
     "FIGHT": "Riña o Agresión Física",
@@ -1664,29 +1750,42 @@ def update_whatsapp_config(payload: dict):
         _whatsapp_config["auto_notify_alerts"] = bool(payload["auto_notify_alerts"])
     if "coordinator_name" in payload:
         _whatsapp_config["coordinator_name"] = payload["coordinator_name"].strip()
+    if "callmebot_api_key" in payload:
+        _whatsapp_config["callmebot_api_key"] = payload["callmebot_api_key"].strip()
+    if "webhook_url" in payload:
+        _whatsapp_config["webhook_url"] = payload["webhook_url"].strip()
     return _whatsapp_config
 
 
 @api_router.post("/cctv/whatsapp-test", tags=["cctv-live"])
-def test_whatsapp_alert(payload: dict):
-    phone = payload.get("phone_number") or _whatsapp_config.get("phone_number", "+573105551234")
-    camera_label = payload.get("camera_label", "Cámara Salón 302")
+async def test_whatsapp_alert(payload: dict):
+    phone = payload.get("phone_number") or _whatsapp_config.get("phone_number", "+573145819221")
+    camera_label = payload.get("camera_label", "Cámara Salón 201")
     incident_type = payload.get("incident_type", "FIGHT")
+    apikey = payload.get("callmebot_api_key") or _whatsapp_config.get("callmebot_api_key")
+    webhook_url = payload.get("webhook_url") or _whatsapp_config.get("webhook_url")
     msg, link = format_whatsapp_alert_message(
         camera_label=camera_label,
-        location="Segundo Piso - Salón 302",
+        location="Segundo Piso - Salón 201",
         incident_type=incident_type,
-        title="Simulación de Prueba de Alerta en Directo",
-        description="Se ha verificado el enlace de comunicación institucional. El sistema notificará de inmediato aquí cualquier hecho de riesgo detectado por la IA.",
+        title="Verificación de Conexión y Envío Automático",
+        description="Se ha vinculado exitosamente esta línea de WhatsApp para recepción inmediata y automática de reportes y alertas generadas por Gemini IA.",
         confidence="Alta fidelidad",
-        suggested_action="Prueba de enlace exitosa. No se requiere intervención.",
+        suggested_action="Línea directiva habilitada para actuación inmediata.",
         phone_number=phone,
+    )
+    auto_res = await dispatch_automated_whatsapp(
+        phone_number=phone,
+        message_text=msg,
+        apikey=apikey,
+        webhook_url=webhook_url
     )
     return {
         "status": "ok",
         "phone_number": phone,
         "message": msg,
         "whatsapp_link": link,
+        "auto_dispatch": auto_res
     }
 
 
@@ -1882,6 +1981,14 @@ async def analyze_broadcast_frame(
         db.add(alert_record)
         db.commit()
         db.refresh(alert_record)
+
+        if _whatsapp_config.get("auto_notify_alerts", True):
+            asyncio.create_task(dispatch_automated_whatsapp(
+                phone_number=phone,
+                message_text=msg,
+                apikey=_whatsapp_config.get("callmebot_api_key"),
+                webhook_url=_whatsapp_config.get("webhook_url")
+            ))
 
         # Broadcast immediately to global CCTV websocket
         WebRTCSignalingManager.broadcast_to_room("global", {
