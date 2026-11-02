@@ -2275,15 +2275,41 @@ function AdminManual({ user }) {
 /* =========================================================================
    COMPONENTE: REPRODUCTOR SPOTLIGHT CCTV EN VIVO (WEBRTC + FALLBACK)
    ========================================================================= */
+/* Helper para forzar bitrate de Alta Definición (1080p 4.5 Mbps) en WebRTC */
+function setSdpBitrate(sdp, bitrateKbps = 4500) {
+  if (!sdp || typeof sdp !== 'string') return sdp
+  let lines = sdp.split('\r\n')
+  let videoLineIdx = lines.findIndex(l => l.startsWith('m=video'))
+  if (videoLineIdx === -1) return sdp
+
+  let nextMLineIdx = lines.findIndex((l, i) => i > videoLineIdx && l.startsWith('m='))
+  if (nextMLineIdx === -1) nextMLineIdx = lines.length
+
+  lines = lines.filter((l, i) => {
+    if (i > videoLineIdx && i < nextMLineIdx && (l.startsWith('b=AS:') || l.startsWith('b=TIAS:'))) {
+      return false
+    }
+    return true
+  })
+
+  videoLineIdx = lines.findIndex(l => l.startsWith('m=video'))
+  lines.splice(videoLineIdx + 1, 0, `b=AS:${bitrateKbps}`, `b=TIAS:${bitrateKbps * 1000}`)
+  return lines.join('\r\n')
+}
 function LiveStreamSpotlight({ camera, session, isMuted }) {
   const videoRef = useRef(null)
+  const [streamActive, setStreamActive] = useState(false)
   const [useFallback, setUseFallback] = useState(false)
+  const [realResolution, setRealResolution] = useState('')
+  const [coverMode, setCoverMode] = useState(false)
   const [reloadNonce, setReloadNonce] = useState(Date.now())
 
   useEffect(() => {
     let ws = null
     let pc = null
     let fallbackTimeout = null
+    let pingInterval = null
+    let active = true
 
     const connectWebRTC = () => {
       try {
@@ -2292,20 +2318,26 @@ function LiveStreamSpotlight({ camera, session, isMuted }) {
         pc = new RTCPeerConnection({
           iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' }
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:stun3.l.google.com:19302' },
+            { urls: 'stun:stun4.l.google.com:19302' },
+            { urls: 'stun:global.stun.twilio.com:3478' }
           ]
         })
 
         pc.ontrack = (ev) => {
+          if (!active) return
           if (videoRef.current && ev.streams && ev.streams[0]) {
             videoRef.current.srcObject = ev.streams[0]
             videoRef.current.play().catch(() => {})
+            setStreamActive(true)
             setUseFallback(false)
           }
         }
 
         pc.onicecandidate = (ev) => {
-          if (ev.candidate && ws.readyState === WebSocket.OPEN) {
+          if (ev.candidate && ws && ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: 'candidate', candidate: ev.candidate }))
           }
         }
@@ -2317,11 +2349,15 @@ function LiveStreamSpotlight({ camera, session, isMuted }) {
         ws.onmessage = async (ev) => {
           try {
             const data = JSON.parse(ev.data)
-            if (data.type === 'offer') {
-              await pc.setRemoteDescription(new RTCSessionDescription(data.offer))
+            if (data.type === 'broadcaster_online') {
+              ws.send(JSON.stringify({ type: 'viewer_ready', camera_id: camera.id }))
+            } else if (data.type === 'offer') {
+              const offerSdp = setSdpBitrate(data.offer.sdp, 4500)
+              await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: offerSdp }))
               const answer = await pc.createAnswer()
-              await pc.setLocalDescription(answer)
-              ws.send(JSON.stringify({ type: 'answer', answer }))
+              const answerSdp = setSdpBitrate(answer.sdp, 4500)
+              await pc.setLocalDescription(new RTCSessionDescription({ type: 'answer', sdp: answerSdp }))
+              ws.send(JSON.stringify({ type: 'answer', answer: { type: 'answer', sdp: answerSdp } }))
             } else if (data.type === 'candidate' && data.candidate) {
               await pc.addIceCandidate(new RTCIceCandidate(data.candidate))
             }
@@ -2337,77 +2373,121 @@ function LiveStreamSpotlight({ camera, session, isMuted }) {
 
     connectWebRTC()
 
-    // Si WebRTC no recibe stream en 4 segundos, activar el fallback de video en búfer
+    // Ping viewer_ready periódicamente hasta recibir la señal para enlazar instantáneamente
+    pingInterval = setInterval(() => {
+      if (ws && ws.readyState === WebSocket.OPEN && !videoRef.current?.srcObject) {
+        ws.send(JSON.stringify({ type: 'viewer_ready', camera_id: camera.id }))
+      }
+    }, 2000)
+
+    // Si WebRTC tarda más de 7 segundos en negociar, mostrar buffer de apoyo sin desconectar WebRTC
     fallbackTimeout = setTimeout(() => {
       if (!videoRef.current?.srcObject) {
         setUseFallback(true)
       }
-    }, 4000)
+    }, 7000)
 
-    // Recargar feed cada 6 segundos si usamos fallback
     const interval = setInterval(() => {
       setReloadNonce(Date.now())
-    }, 6000)
+    }, 5000)
 
     return () => {
+      active = false
       clearTimeout(fallbackTimeout)
+      clearInterval(pingInterval)
       clearInterval(interval)
       if (ws) ws.close()
       if (pc) pc.close()
     }
   }, [camera.id])
 
-  const [coverMode, setCoverMode] = useState(true)
   const feedUrl = `${API_BASE_URL}/cctv/live-feed/${camera.id}?t=${reloadNonce}`
   const videoFit = coverMode ? 'cover' : 'contain'
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-      <div className="live-stream-overlay-banner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '92%', maxWidth: '95%' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+    <div style={{ position: 'relative', width: '100%', height: '100%', background: '#020617', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+      <div className="live-stream-overlay-banner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '94%', maxWidth: '96%', zIndex: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           <span className="pulse-tag" />
-          <span>🔴 EN VIVO · {camera.label} ({session?.duration_seconds || 0}s)</span>
+          <span style={{ fontWeight: 700 }}>
+            🔴 EN VIVO · {camera.label} ({session?.duration_seconds || 0}s)
+          </span>
+          <span style={{
+            fontSize: '0.68rem',
+            padding: '2px 6px',
+            borderRadius: '4px',
+            background: streamActive ? 'rgba(16, 185, 129, 0.25)' : 'rgba(56, 189, 248, 0.2)',
+            color: streamActive ? '#34d399' : '#38bdf8',
+            border: streamActive ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(56, 189, 248, 0.3)',
+            fontWeight: 800
+          }}>
+            {streamActive ? `⚡ ${realResolution || '1080p Full HD'} • P2P Directo` : '📡 Sincronizando HD...'}
+          </span>
         </div>
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); setCoverMode(!coverMode); }}
           style={{
-            background: 'rgba(15, 23, 42, 0.75)',
+            background: 'rgba(15, 23, 42, 0.85)',
             border: '1px solid rgba(56, 189, 248, 0.4)',
             color: 'var(--accent-cyan)',
             borderRadius: '6px',
-            padding: '2px 8px',
-            fontSize: '0.68rem',
+            padding: '3px 10px',
+            fontSize: '0.72rem',
             fontWeight: 700,
             cursor: 'pointer',
             backdropFilter: 'blur(4px)'
           }}
-          title="Alternar entre modo panorámico horizontal 16:9 y ajuste completo"
+          title="Alternar entre modo panorámico y ajuste nativo"
         >
-          {coverMode ? '🖥️ Panorámica' : '📱 Ajuste'}
+          {coverMode ? '🖥️ Panorámica' : '📱 Ajuste Nativo'}
         </button>
       </div>
 
-      {useFallback ? (
+      {/* Video WebRTC Primario de Alta Definición (Siempre montado en el DOM) */}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted={isMuted}
+        controls={false}
+        className="cctv-video-stream"
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: videoFit,
+          display: streamActive ? 'block' : (useFallback ? 'none' : 'block'),
+          imageRendering: '-webkit-optimize-contrast',
+          filter: 'contrast(1.03) saturate(1.05)',
+          background: '#000'
+        }}
+        onLoadedMetadata={() => {
+          if (videoRef.current) {
+            const w = videoRef.current.videoWidth
+            const h = videoRef.current.videoHeight
+            if (w && h) setRealResolution(`${w}x${h} HD`)
+          }
+        }}
+      />
+
+      {/* Fallback de Video en Búfer si WebRTC aún negocia */}
+      {!streamActive && useFallback && (
         <video
           key={feedUrl}
           src={feedUrl}
           autoPlay
           playsInline
           muted={isMuted}
-          controls
+          controls={false}
           className="cctv-video-stream"
-          style={{ width: '100%', height: '100%', objectFit: videoFit }}
-        />
-      ) : (
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted={isMuted}
-          controls
-          className="cctv-video-stream"
-          style={{ width: '100%', height: '100%', objectFit: videoFit }}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: videoFit,
+            imageRendering: '-webkit-optimize-contrast',
+            filter: 'contrast(1.03) saturate(1.05)',
+            background: '#000'
+          }}
         />
       )}
     </div>
@@ -2878,9 +2958,9 @@ function CCTVBroadcaster({ user }) {
       try {
         setErrorMsg('')
         const qualityConstraints = {
-          '720p': { width: { ideal: 1280, min: 854 }, height: { ideal: 720, min: 480 }, frameRate: { ideal: 30 } },
-          '1080p': { width: { ideal: 1920, min: 1280 }, height: { ideal: 1080, min: 720 }, frameRate: { ideal: 30, max: 60 } },
-          '4K': { width: { ideal: 3840, min: 1920 }, height: { ideal: 2160, min: 1080 }, frameRate: { ideal: 30 } }
+          '720p': { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
+          '1080p': { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } },
+          '4K': { width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 30 } }
         }
         const s = await navigator.mediaDevices.getUserMedia({
           video: {
@@ -3016,7 +3096,11 @@ function CCTVBroadcaster({ user }) {
         const pc = new RTCPeerConnection({
           iceServers: [
             { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' }
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:stun3.l.google.com:19302' },
+            { urls: 'stun:stun4.l.google.com:19302' },
+            { urls: 'stun:global.stun.twilio.com:3478' }
           ]
         })
         pcRef.current = pc
@@ -3039,15 +3123,37 @@ function CCTVBroadcaster({ user }) {
           }
         }
 
+        ws.onopen = () => {
+          ws.send(JSON.stringify({ type: 'broadcaster_online', camera_id: selectedCamId }))
+        }
+
+        const applySenderQuality = (peerConnection) => {
+          try {
+            const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === 'video')
+            if (sender) {
+              const params = sender.getParameters() || {}
+              if (!params.encodings || params.encodings.length === 0) params.encodings = [{}]
+              params.encodings[0].maxBitrate = bitrate
+              params.encodings[0].maxFramerate = 30
+              params.degradationPreference = 'maintain-resolution'
+              sender.setParameters(params).catch(() => {})
+            }
+          } catch (_e) {}
+        }
+
         ws.onmessage = async (ev) => {
           try {
             const data = JSON.parse(ev.data)
             if (data.type === 'viewer_ready') {
               const offer = await pc.createOffer()
-              await pc.setLocalDescription(offer)
-              ws.send(JSON.stringify({ type: 'offer', offer }))
+              const offerSdp = setSdpBitrate(offer.sdp, Math.round(bitrate / 1000))
+              await pc.setLocalDescription(new RTCSessionDescription({ type: 'offer', sdp: offerSdp }))
+              applySenderQuality(pc)
+              ws.send(JSON.stringify({ type: 'offer', offer: { type: 'offer', sdp: offerSdp } }))
             } else if (data.type === 'answer') {
-              await pc.setRemoteDescription(new RTCSessionDescription(data.answer))
+              const answerSdp = setSdpBitrate(data.answer.sdp, Math.round(bitrate / 1000))
+              await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: answerSdp }))
+              applySenderQuality(pc)
             } else if (data.type === 'candidate' && data.candidate) {
               await pc.addIceCandidate(new RTCIceCandidate(data.candidate))
             }
@@ -4953,13 +5059,13 @@ function AdminUsers({ user }) {
 
     try {
       await apiRequest(`/admin/users/${targetUser.id}/role`, {
-        method: 'PUT',
+        method: 'PATCH',
         body: JSON.stringify({ role: newRole }),
       })
-      setSuccess(`Rol de ${targetUser.full_name} actualizado exitosamente.`)
+      setSuccess(`Permisos de ${targetUser.full_name} actualizados a ${newRole === 'ADMIN' ? 'Administrador' : 'Usuario'} exitosamente.`)
       await load()
     } catch (e) {
-      setError(e.message)
+      setError(`No fue posible actualizar el rol: ${e.message}`)
     }
   }
 
@@ -4967,14 +5073,13 @@ function AdminUsers({ user }) {
     if (targetUser.is_sanctioned) {
       if (!window.confirm(`¿Deseas levantar la sanción a ${targetUser.full_name}?`)) return
       try {
-        await apiRequest(`/admin/users/${targetUser.id}/sanction`, {
-          method: 'POST',
-          body: JSON.stringify({ is_sanctioned: false, reason: null }),
+        await apiRequest(`/admin/users/${targetUser.id}/unsanction`, {
+          method: 'POST'
         })
         setSuccess(`Sanción levantada a ${targetUser.full_name}.`)
         await load()
       } catch (e) {
-        setError(e.message)
+        setError(`Error al levantar sanción: ${e.message}`)
       }
     } else {
       const reason = window.prompt(`Ingresa el motivo de la sanción para ${targetUser.full_name}:`)
@@ -4987,7 +5092,7 @@ function AdminUsers({ user }) {
         setSuccess(`Usuario ${targetUser.full_name} sancionado correctamente.`)
         await load()
       } catch (e) {
-        setError(e.message)
+        setError(`Error al sancionar: ${e.message}`)
       }
     }
   }

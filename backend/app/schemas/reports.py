@@ -56,7 +56,7 @@ class UserResponse(BaseModel):
 
 
 class UserRoleUpdate(BaseModel):
-    role: Literal["ADMIN", "USER"]
+    role: str
 
 
 class SanctionRequest(BaseModel):

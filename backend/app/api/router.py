@@ -943,6 +943,7 @@ def list_users(
 
 
 @api_router.patch("/admin/users/{user_id}/role", response_model=UserResponse, tags=["admin"])
+@api_router.put("/admin/users/{user_id}/role", response_model=UserResponse, tags=["admin"])
 def update_user_role(
     user_id: str,
     payload: UserRoleUpdate,
@@ -953,13 +954,17 @@ def update_user_role(
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
+    normalized_role = payload.role.strip().upper()
+    if normalized_role not in (UserRole.ADMIN, UserRole.USER):
+        raise HTTPException(status_code=400, detail="Rol inválido. Debe ser ADMIN o USER.")
+
     # Si se intenta quitar el rol de admin a sí mismo, validar que no quede el sistema sin admins
-    if user.id == current_admin.id and payload.role != UserRole.ADMIN:
-        admin_count = db.scalar(select(User).where(User.role == UserRole.ADMIN))
-        if not admin_count:
+    if user.id == current_admin.id and normalized_role != UserRole.ADMIN:
+        admin_count = db.scalar(select(func.count(User.id)).where(User.role == UserRole.ADMIN))
+        if admin_count and admin_count <= 1:
             raise HTTPException(status_code=400, detail="No puedes quitarte el rol de administrador siendo el único.")
 
-    user.role = payload.role
+    user.role = normalized_role
     db.commit()
     db.refresh(user)
     return user
@@ -968,7 +973,7 @@ def update_user_role(
 @api_router.post("/admin/users/{user_id}/sanction", response_model=UserResponse, tags=["admin"])
 def sanction_user(
     user_id: str,
-    payload: SanctionRequest,
+    payload: dict,
     current_admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> User:
@@ -978,8 +983,13 @@ def sanction_user(
     if user.id == current_admin.id:
         raise HTTPException(status_code=400, detail="No puedes sancionarte a ti mismo")
     
-    user.is_sanctioned = True
-    user.sanction_reason = payload.reason
+    is_sanctioned = payload.get("is_sanctioned", True)
+    if not is_sanctioned:
+        user.is_sanctioned = False
+        user.sanction_reason = None
+    else:
+        user.is_sanctioned = True
+        user.sanction_reason = payload.get("reason", "Incumplimiento de normas escolares")
     db.commit()
     db.refresh(user)
     return user
