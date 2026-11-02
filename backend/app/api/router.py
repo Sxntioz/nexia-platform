@@ -1474,9 +1474,9 @@ def start_broadcast(
     aspect_mode = payload.get("aspect_mode", "landscape") if payload else "landscape"
     camera = db.get(Camera, camera_id) if camera_id else None
     if not camera:
-        camera = db.scalar(select(Camera).where(Camera.identifier == "CAM-CEL-1"))
+        camera = db.scalar(select(Camera).order_by(Camera.id))
         if not camera:
-            camera = Camera(identifier="CAM-CEL-1", label="CAM Prueba Cel 1", location="CAM Prueba Cel 1")
+            camera = Camera(identifier="CAM-201", label="Cámara Salón 201", location="Segundo Piso - Salón 201")
             db.add(camera)
             db.commit()
             db.refresh(camera)

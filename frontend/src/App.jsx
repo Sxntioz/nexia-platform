@@ -80,9 +80,7 @@ const SCHOOL_LOCATIONS = {
     'Rampa / Pasillo Conector (P3)',
     'Gradas Comedor',
   ],
-  'Cámaras Móviles / Pruebas en Vivo': [
-    'CAM Prueba Cel 1',
-  ],
+
 }
 
 const STATUS = {
@@ -97,19 +95,13 @@ const STATUS = {
 }
 
 function renderCameraOptions(cameras) {
-  const liveMobile = cameras.filter(c => c.identifier?.startsWith('CAM-CEL') || c.label?.toLowerCase().includes('cel'))
-  const p1 = cameras.filter(c => !liveMobile.includes(c) && (c.identifier?.startsWith('CAM-P1') || c.location?.toLowerCase().includes('patio') || c.location?.toLowerCase().includes('inform')))
-  const p2 = cameras.filter(c => !liveMobile.includes(c) && (c.identifier?.startsWith('CAM-2') || c.location?.toLowerCase().includes('20') || c.location?.toLowerCase().includes('21')))
-  const p3 = cameras.filter(c => !liveMobile.includes(c) && (c.identifier?.startsWith('CAM-3') || c.location?.toLowerCase().includes('30') || c.location?.toLowerCase().includes('31')))
-  const others = cameras.filter(c => !liveMobile.includes(c) && !p1.includes(c) && !p2.includes(c) && !p3.includes(c))
+  const p1 = cameras.filter(c => c.identifier?.startsWith('CAM-P1') || c.location?.toLowerCase().includes('patio') || c.location?.toLowerCase().includes('inform'))
+  const p2 = cameras.filter(c => c.identifier?.startsWith('CAM-2') || c.location?.toLowerCase().includes('20') || c.location?.toLowerCase().includes('21'))
+  const p3 = cameras.filter(c => c.identifier?.startsWith('CAM-3') || c.location?.toLowerCase().includes('30') || c.location?.toLowerCase().includes('31'))
+  const others = cameras.filter(c => !p1.includes(c) && !p2.includes(c) && !p3.includes(c))
 
   return (
     <>
-      {liveMobile.length > 0 && (
-        <optgroup label="📱 Cámaras Móviles en Vivo">
-          {liveMobile.map(c => <option key={c.id} value={c.id}>🔴 {c.label} ({c.identifier})</option>)}
-        </optgroup>
-      )}
       {p1.length > 0 && (
         <optgroup label="Primer Piso (Patios, Zonas Comunes e Informática)">
           {p1.map(c => <option key={c.id} value={c.id}>{c.label} ({c.location})</option>)}
@@ -1697,17 +1689,7 @@ function ReportForm({ user, lang = 'es', initialData = null }) {
     let found = cameraCatalog.find(c => c.location && c.location.toLowerCase() === locLower)
     if (found) return found
 
-    if (locLower.includes('cel') || locLower.includes('prueba') || locLower.includes('cam-cel-1')) {
-      found = cameraCatalog.find(c => c.identifier === 'CAM-CEL-1' || c.label?.toLowerCase().includes('cel'))
-      if (found) return found
-      return {
-        id: 'cam-cel-1',
-        identifier: 'CAM-CEL-1',
-        label: 'CAM Prueba Cel 1 (Celular En Vivo)',
-        location: 'CAM Prueba Cel 1',
-        recording_id: null
-      }
-    }
+
 
     const numMatch = form.location.match(/\b(2\d\d|3\d\d)\b/)
     if (numMatch) {
@@ -2309,9 +2291,9 @@ function AdminManual({ user }) {
    COMPONENTE: REPRODUCTOR SPOTLIGHT CCTV EN VIVO (WEBRTC + FALLBACK)
    ========================================================================= */
 /* Helper para forzar bitrate de Alta Definición (1080p 4.5 Mbps) en WebRTC */
-function setSdpBitrate(sdp, bitrateKbps = 4500) {
+function setSdpBitrate(sdp, bitrateKbps = 5000) {
   if (!sdp || typeof sdp !== 'string') return sdp
-  let lines = sdp.split('\r\n')
+  let lines = sdp.split(/\r?\n/)
   let videoLineIdx = lines.findIndex(l => l.startsWith('m=video'))
   if (videoLineIdx === -1) return sdp
 
@@ -2346,6 +2328,7 @@ function LiveStreamSpotlight({ camera, session, isMuted }) {
 
     const connectWebRTC = () => {
       try {
+        const pendingCandidates = []
         const wsUrl = getWebSocketUrl(`/api/cctv/ws/${camera.id}`)
         ws = new WebSocket(wsUrl)
         pc = new RTCPeerConnection({
@@ -2361,8 +2344,12 @@ function LiveStreamSpotlight({ camera, session, isMuted }) {
 
         pc.ontrack = (ev) => {
           if (!active) return
-          if (videoRef.current && ev.streams && ev.streams[0]) {
-            videoRef.current.srcObject = ev.streams[0]
+          let remoteStream = (ev.streams && ev.streams[0]) ? ev.streams[0] : null
+          if (!remoteStream && ev.track) {
+            remoteStream = new MediaStream([ev.track])
+          }
+          if (videoRef.current && remoteStream) {
+            videoRef.current.srcObject = remoteStream
             videoRef.current.play().catch(() => {})
             setStreamActive(true)
             setUseFallback(false)
@@ -2385,14 +2372,22 @@ function LiveStreamSpotlight({ camera, session, isMuted }) {
             if (data.type === 'broadcaster_online') {
               ws.send(JSON.stringify({ type: 'viewer_ready', camera_id: camera.id }))
             } else if (data.type === 'offer') {
-              const offerSdp = setSdpBitrate(data.offer.sdp, 4500)
+              const offerSdp = setSdpBitrate(data.offer.sdp, 5500)
               await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: offerSdp }))
+              while (pendingCandidates.length > 0) {
+                const cand = pendingCandidates.shift()
+                await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {})
+              }
               const answer = await pc.createAnswer()
-              const answerSdp = setSdpBitrate(answer.sdp, 4500)
+              const answerSdp = setSdpBitrate(answer.sdp, 5500)
               await pc.setLocalDescription(new RTCSessionDescription({ type: 'answer', sdp: answerSdp }))
               ws.send(JSON.stringify({ type: 'answer', answer: { type: 'answer', sdp: answerSdp } }))
             } else if (data.type === 'candidate' && data.candidate) {
-              await pc.addIceCandidate(new RTCIceCandidate(data.candidate))
+              if (pc.remoteDescription && pc.remoteDescription.type) {
+                await pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(() => {})
+              } else {
+                pendingCandidates.push(data.candidate)
+              }
             }
           } catch (e) {
             console.error('WebRTC msg err:', e)
@@ -2457,23 +2452,29 @@ function LiveStreamSpotlight({ camera, session, isMuted }) {
             {streamActive ? `⚡ ${realResolution || '1080p Full HD'} • P2P Directo` : '📡 Sincronizando HD...'}
           </span>
         </div>
-        <span
+        <button
+          type="button"
+          onClick={() => setCoverMode(m => !m)}
           style={{
             background: 'rgba(15, 23, 42, 0.85)',
             border: '1px solid rgba(56, 189, 248, 0.4)',
             color: 'var(--accent-cyan)',
             borderRadius: '6px',
-            padding: '3px 10px',
+            padding: '4px 12px',
             fontSize: '0.72rem',
             fontWeight: 700,
+            cursor: 'pointer',
             backdropFilter: 'blur(4px)',
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '4px'
+            gap: '6px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+            transition: 'all 0.2s ease'
           }}
+          title="Alternar entre modo Panorámico 16:9 y Llenar Pantalla"
         >
-          🖥️ 16:9 Panorámica CCTV
-        </span>
+          {coverMode ? '🔍 Modo: Llenar Pantalla' : '🖥️ 16:9 Panorámica CCTV'}
+        </button>
       </div>
 
       {/* Video WebRTC Primario de Alta Definición (Siempre montado en el DOM) */}
@@ -2494,6 +2495,13 @@ function LiveStreamSpotlight({ camera, session, isMuted }) {
           background: '#000'
         }}
         onLoadedMetadata={() => {
+          if (videoRef.current) {
+            const w = videoRef.current.videoWidth
+            const h = videoRef.current.videoHeight
+            if (w && h) setRealResolution(`${w}x${h} HD`)
+          }
+        }}
+        onResize={() => {
           if (videoRef.current) {
             const w = videoRef.current.videoWidth
             const h = videoRef.current.videoHeight
@@ -2841,7 +2849,7 @@ function ConnectPhoneModal({ isOpen, onClose, cameras, selectedCam, liveStatus, 
     if (selectedCam) {
       setModalCamId(selectedCam.id)
     } else if (cameras && cameras.length > 0) {
-      const def = cameras.find(c => c.identifier === 'CAM-CEL-1') || cameras[0]
+      const def = (cameras && cameras.length > 0) ? cameras[0] : null
       setModalCamId(def.id)
     }
   }, [selectedCam, cameras])
@@ -2984,7 +2992,7 @@ function CCTVBroadcaster({ user }) {
           if (camParam) {
             matched = cams.find(c => c.id === camParam || c.identifier === camParam)
           }
-          const def = matched || cams.find(c => c.identifier === 'CAM-CEL-1') || cams[0]
+          const def = matched || cams[0]
           if (def) setSelectedCamId(def.id)
         }
       })
@@ -3185,6 +3193,7 @@ function CCTVBroadcaster({ user }) {
           } catch (_e) {}
         }
 
+        const pendingBroadcasterCandidates = []
         ws.onmessage = async (ev) => {
           try {
             const data = JSON.parse(ev.data)
@@ -3197,9 +3206,17 @@ function CCTVBroadcaster({ user }) {
             } else if (data.type === 'answer') {
               const answerSdp = setSdpBitrate(data.answer.sdp, Math.round(bitrate / 1000))
               await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: answerSdp }))
+              while (pendingBroadcasterCandidates.length > 0) {
+                const cand = pendingBroadcasterCandidates.shift()
+                await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {})
+              }
               applySenderQuality(pc)
             } else if (data.type === 'candidate' && data.candidate) {
-              await pc.addIceCandidate(new RTCIceCandidate(data.candidate))
+              if (pc.remoteDescription && pc.remoteDescription.type) {
+                await pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(() => {})
+              } else {
+                pendingBroadcasterCandidates.push(data.candidate)
+              }
             }
           } catch (e) {
             console.error('WebRTC broadcaster err:', e)
@@ -3450,7 +3467,7 @@ function CCTVBroadcaster({ user }) {
             <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
               <button
                 className="button primary small"
-                onClick={() => navigate('report', { location: selectedCam?.location || selectedCam?.label || 'CAM Prueba Cel 1' })}
+                onClick={() => navigate('report', { location: selectedCam?.location || selectedCam?.label || 'Cámara Salón 201' })}
               >
                 📋 Crear Reporte para {selectedCam?.label || 'esta cámara'}
               </button>
@@ -3598,7 +3615,7 @@ function CCTVBroadcaster({ user }) {
           </div>
 
           <div style={{ position: 'absolute', bottom: '12px', left: '14px', zIndex: 10, fontSize: '0.78rem', color: '#fff', textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}>
-            <strong>{selectedCam?.label || 'CAM Prueba Cel 1'}</strong> • {qualityPreset.toUpperCase()} • {zoomLevel}x • {isPhoneHorizontal ? '🟢 16:9 Pantalla Completa' : '📐 16:9 Panorámica (Gira Celular)'}
+            <strong>{selectedCam?.label || 'Cámara Salón 201'}</strong> • {qualityPreset.toUpperCase()} • {zoomLevel}x • {isPhoneHorizontal ? '🟢 16:9 Pantalla Completa' : '📐 16:9 Panorámica (Gira Celular)'}
           </div>
         </div>
 
@@ -3614,7 +3631,7 @@ function CCTVBroadcaster({ user }) {
             >
               {cameras.map(c => (
                 <option key={c.id} value={c.id}>
-                  {c.identifier === 'CAM-CEL-1' ? '📱 ' : ''}{c.label} ({c.identifier})
+                  {c.label} ({c.identifier})
                 </option>
               ))}
             </select>
@@ -3897,7 +3914,7 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
 
   const filteredCameras = useMemo(() => {
     if (floorFilter === 'CEL') {
-      return cameras.filter(c => c.identifier.startsWith('CAM-CEL') || c.label.toLowerCase().includes('cel'))
+      return cameras.filter(c => Boolean(liveStatus[c.id]))
     }
     if (floorFilter === '1') {
       return cameras.filter(c => c.identifier.startsWith('CAM-P1'))

@@ -70,10 +70,13 @@ async def lifespan(_: FastAPI):
             except Exception:
                 db.rollback()
 
-            # Asegurar cámara de prueba en vivo para celular
-            cam_cel = db.query(Camera).filter(Camera.identifier == "CAM-CEL-1").first()
-            if not cam_cel:
-                db.add(Camera(identifier="CAM-CEL-1", label="CAM Prueba Cel 1", location="CAM Prueba Cel 1"))
+            # Eliminar cámara de prueba 'CAM Prueba Cel 1' si existía previamente
+            old_cams = db.query(Camera).filter(
+                (Camera.identifier == "CAM-CEL-1") | (Camera.label.ilike("%Prueba Cel%"))
+            ).all()
+            for old_c in old_cams:
+                db.delete(old_c)
+            if old_cams:
                 db.commit()
 
             # Asegurar usuario administrador por defecto con credenciales actualizadas
