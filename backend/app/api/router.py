@@ -1300,7 +1300,7 @@ webrtc_manager = WebRTCSignalingManager()
 
 # --- CONFIGURACIÓN DE ALERTAS WHATSAPP Y CENTINELA IA ---
 _whatsapp_config = {
-    "phone_number": "+573145819221",
+    "phone_number": "+573145813221",
     "auto_notify_alerts": True,
     "coordinator_name": "Coordinador de Convivencia",
     "callmebot_api_key": "",
@@ -1541,7 +1541,7 @@ def format_whatsapp_alert_message(
     description: str,
     confidence: str,
     suggested_action: str | None = None,
-    phone_number: str = "+573145819221"
+    phone_number: str = "+573145813221"
 ) -> tuple[str, str]:
     now = datetime.now()
     tipo_str = TYPE_ALERT_LABELS.get(incident_type, incident_type)
@@ -1591,7 +1591,7 @@ def run_continuous_audit_task(session_id: str, camera_id: str, camera_label: str
             action = res.get("suggested_action", "Verificar de inmediato en el aula.")
 
             _load_persisted_whatsapp_config()
-            phone = _whatsapp_config.get("phone_number", "+573145819221")
+            phone = _whatsapp_config.get("phone_number", "+573145813221")
             wa_msg, wa_link = format_whatsapp_alert_message(
                 camera_label=camera_label,
                 location=location,
@@ -1925,7 +1925,7 @@ async def dispatch_cctv_alert_to_whatsapp(payload: dict):
     vía UltraMsg, Whapi, CallMeBot o Webhooks, sin abrir pestañas ni requerir clics adicionales.
     """
     _load_persisted_whatsapp_config()
-    phone = payload.get("phone_number") or _whatsapp_config.get("phone_number", "+573145819221")
+    phone = payload.get("phone_number") or _whatsapp_config.get("phone_number", "+573145813221")
     camera_label = payload.get("camera_label", "CCTV Escolar")
     location = payload.get("location", camera_label)
     incident_type = payload.get("incident_type", "FIGHT")
@@ -1964,7 +1964,7 @@ async def dispatch_cctv_alert_to_whatsapp(payload: dict):
 @api_router.post("/cctv/whatsapp-test", tags=["cctv-live"])
 async def test_whatsapp_alert(payload: dict):
     _load_persisted_whatsapp_config()
-    phone = payload.get("phone_number") or _whatsapp_config.get("phone_number", "+573145819221")
+    phone = payload.get("phone_number") or _whatsapp_config.get("phone_number", "+573145813221")
     camera_label = payload.get("camera_label", "Cámara Salón 201")
     incident_type = payload.get("incident_type", "FIGHT")
     apikey = payload.get("callmebot_api_key") or _whatsapp_config.get("callmebot_api_key")
@@ -2016,7 +2016,7 @@ def list_cctv_alerts(limit: int = 30, db: Session = Depends(get_db)):
     ).all()
     results = []
     _load_persisted_whatsapp_config()
-    phone = _whatsapp_config.get("phone_number", "+573145819221")
+    phone = _whatsapp_config.get("phone_number", "+573145813221")
     for a in alerts:
         _, link = format_whatsapp_alert_message(
             camera_label=a.camera_label,
@@ -2085,7 +2085,7 @@ def manual_audit_live_camera(payload: dict, db: Session = Depends(get_db)):
 
     res = analyze_live_stream_snippet(video_path, cam.label, cam.location or cam.label)
     _load_persisted_whatsapp_config()
-    phone = _whatsapp_config.get("phone_number", "+573145819221")
+    phone = _whatsapp_config.get("phone_number", "+573145813221")
 
     if res.get("incident_detected"):
         incident_type = res.get("incident_type", "FIGHT")
@@ -2165,7 +2165,7 @@ async def analyze_broadcast_frame(
     result = analyze_live_frame_snapshot(image_bytes, camera_label, location)
 
     _load_persisted_whatsapp_config()
-    phone = _whatsapp_config.get("phone_number", "+573145819221")
+    phone = _whatsapp_config.get("phone_number", "+573145813221")
     incident_detected = bool(result.get("incident_detected", False))
     incident_type = result.get("incident_type", "NORMAL")
     title = result.get("title", "Convivencia Pacífica")

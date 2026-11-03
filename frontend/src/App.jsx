@@ -2545,9 +2545,9 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
   const [phone, setPhone] = useState(() => {
     try {
       const local = localStorage.getItem('nexia_whatsapp_config')
-      if (local) return JSON.parse(local).phone_number || '+573145819221'
+      if (local) return JSON.parse(local).phone_number || '+573145813221'
     } catch (_e) {}
-    return config?.phone_number || '+573145819221'
+    return config?.phone_number || '+573145813221'
   })
   const [autoNotify, setAutoNotify] = useState(config?.auto_notify_alerts ?? true)
   const [coordinator, setCoordinator] = useState(config?.coordinator_name || 'Coordinador de Convivencia')
@@ -2587,7 +2587,7 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
 
   useEffect(() => {
     if (config) {
-      setPhone(config.phone_number || '+573145819221')
+      setPhone(config.phone_number || '+573145813221')
       setAutoNotify(config.auto_notify_alerts ?? true)
       setCoordinator(config.coordinator_name || 'Coordinador de Convivencia')
       if (config.callmebot_api_key) setApiKey(config.callmebot_api_key)
@@ -2777,7 +2777,7 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
                 style={{ width: '100%', padding: '10px 12px', background: 'rgba(30, 41, 59, 0.8)', border: '1px solid rgba(255, 255, 255, 0.15)', borderRadius: '10px', color: '#fff', fontSize: '0.95rem', fontFamily: 'monospace' }}
               />
               <small style={{ color: 'var(--text-muted)', fontSize: '0.74rem', marginTop: '3px', display: 'block' }}>
-                Número con indicativo de país (ej. +573145819221).
+                Número con indicativo de país (ej. +573145813221).
               </small>
             </div>
 
@@ -2998,7 +2998,7 @@ function LiveIncidentAlertModal({ alert, onClose, onFileReport }) {
           return s ? JSON.parse(s) : null
         } catch (_e) { return null }
       })()
-      const ph = (localCfg?.phone_number || '+573145819221').replace(/[^\d]/g, '')
+      const ph = (localCfg?.phone_number || '+573145813221').replace(/[^\d]/g, '')
       const msg = `🚨 *ALERTA EN VIVO — SISTEMA NEXIA IA* 🚨\n📍 *Cámara:* ${alert.camera_label}\n⚠️ *Hecho:* ${alert.incident_type}\n🔍 *Fidelidad:* ${alert.confidence}\n📝 *Detalle:* ${alert.description}\n⚖️ *Ley 1620:* ${alert.suggested_action || 'Supervisión en el aula'}`
       link = `https://wa.me/${ph}?text=${encodeURIComponent(msg)}`
     }
@@ -4110,7 +4110,7 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
   const [auditBusy, setAuditBusy] = useState(false)
   const [auditToast, setAuditToast] = useState(null)
   const [whatsappConfig, setWhatsappConfig] = useState({
-    phone_number: '+573145819221',
+    phone_number: '+573145813221',
     auto_notify_alerts: true,
     ultramsg_instance_id: 'instance196028',
     ultramsg_token: 'i7nkhyqgyo6p1nj6'
