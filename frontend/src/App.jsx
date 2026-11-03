@@ -2735,20 +2735,12 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
                 </p>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
                   <a
-                    href="https://wa.me/34684723962?text=I%20allow%20callmebot%20to%20send%20me%20messages"
+                    href="https://wa.me/34623786449?text=I%20allow%20callmebot%20to%20send%20me%20messages"
                     target="_blank"
                     rel="noreferrer"
-                    style={{ background: '#25D366', color: '#fff', textDecoration: 'none', padding: '6px 12px', borderRadius: '6px', fontWeight: 700, fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                    style={{ background: '#25D366', color: '#fff', textDecoration: 'none', padding: '7px 14px', borderRadius: '8px', fontWeight: 800, fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '6px', boxShadow: '0 2px 8px rgba(37, 211, 102, 0.4)' }}
                   >
-                    📲 Abrir Bot 1 (+34 684 72 39 62)
-                  </a>
-                  <a
-                    href="https://wa.me/34644919680?text=I%20allow%20callmebot%20to%20send%20me%20messages"
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{ background: '#128C7E', color: '#fff', textDecoration: 'none', padding: '6px 12px', borderRadius: '6px', fontWeight: 700, fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                  >
-                    📲 Abrir Bot 2 (+34 644 91 96 80)
+                    🟢 Abrir Nuevo Bot Activo (+34 623 78 64 49)
                   </a>
                 </div>
                 <small style={{ color: '#94a3b8', display: 'block' }}>

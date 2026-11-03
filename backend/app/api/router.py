@@ -1362,13 +1362,31 @@ async def dispatch_automated_whatsapp(
                         "detail": f"¡Mensaje enviado automáticamente a WhatsApp (+{clean_digits}) sin abrir el chat!",
                     }
                 else:
-                    logger.warning(f"CallMeBot respuesta: {res.text[:200]}")
+                    logger.warning(f"CallMeBot respuesta: {res.text[:200]}, probando TextMeBot fallback...")
+                    # Fallback a TextMeBot
+                    try:
+                        t_url = (
+                            f"https://api.textmebot.com/send.php"
+                            f"?recipient={urllib.parse.quote(target_phone)}"
+                            f"&text={urllib.parse.quote(message_text)}"
+                            f"&apikey={urllib.parse.quote(str(bot_key).strip())}"
+                        )
+                        t_res = await client.get(t_url)
+                        if "success" in t_res.text.lower() or t_res.status_code == 200:
+                            return {
+                                "success": True,
+                                "provider": "TEXTMEBOT_API",
+                                "status_code": t_res.status_code,
+                                "detail": f"¡Mensaje enviado automáticamente a WhatsApp (+{clean_digits})!",
+                            }
+                    except Exception:
+                        pass
                     return {
                         "success": False,
                         "provider": "CALLMEBOT_API",
                         "status_code": res.status_code,
                         "error": res.text[:200],
-                        "detail": "CallMeBot rechazó la solicitud. Verifica el número y tu API Key.",
+                        "detail": "La pasarela rechazó la solicitud. Verifica tu número y tu API Key.",
                     }
         except Exception as e:
             logger.warning(f"Error despachando vía CallMeBot: {e}")
