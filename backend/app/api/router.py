@@ -1300,6 +1300,8 @@ _whatsapp_config = {
     "coordinator_name": "Coordinador de Convivencia",
     "callmebot_api_key": "",
     "webhook_url": "",
+    "ultramsg_instance_id": "",
+    "ultramsg_token": "",
 }
 
 async def dispatch_automated_whatsapp(
@@ -1310,15 +1312,65 @@ async def dispatch_automated_whatsapp(
 ) -> dict:
     """
     Despacha el mensaje de alerta automáticamente al WhatsApp del directivo
-    usando APIs directas (CallMeBot / Webhooks / Gateways).
+    usando APIs directas (UltraMsg, Whapi, CallMeBot, Webhooks).
     """
     import httpx, urllib.parse
     clean_digits = "".join(filter(str.isdigit, phone_number))
     if len(clean_digits) == 10 and clean_digits.startswith("3"):
         clean_digits = "57" + clean_digits
 
-    # 1. Si hay Webhook institucional configurado (Discord, Telegram, Zapier, Make o Custom)
-    target_webhook = webhook_url or _whatsapp_config.get("webhook_url") or os.getenv("WHATSAPP_WEBHOOK_URL")
+    # 1. Pasarela UltraMsg (WhatsApp Cloud Gateway Directo — 100% Automático)
+    inst_id = _whatsapp_config.get("ultramsg_instance_id", "").strip()
+    token_val = _whatsapp_config.get("ultramsg_token", "").strip()
+    target_webhook = webhook_url or _whatsapp_config.get("webhook_url", "").strip() or os.getenv("WHATSAPP_WEBHOOK_URL", "")
+
+    if "api.ultramsg.com" in target_webhook or (inst_id and token_val):
+        try:
+            target_url = target_webhook if ("api.ultramsg.com" in target_webhook) else f"https://api.ultramsg.com/{inst_id}/messages/chat"
+            async with httpx.AsyncClient(timeout=12.0) as client:
+                data = {
+                    "token": token_val or apikey or "",
+                    "to": f"{clean_digits}@c.us",
+                    "body": message_text,
+                }
+                res = await client.post(target_url, data=data)
+                res_data = res.json() if res.headers.get("content-type", "").startswith("application/json") else {}
+                if res.status_code == 200 and not res_data.get("error"):
+                    return {
+                        "success": True,
+                        "provider": "ULTRAMSG_WHATSAPP",
+                        "status_code": res.status_code,
+                        "detail": f"¡Mensaje enviado de forma 100% automática al WhatsApp (+{clean_digits}) vía UltraMsg!",
+                    }
+                elif res_data.get("error"):
+                    logger.warning(f"UltraMsg error: {res_data.get('error')}")
+        except Exception as e:
+            logger.warning(f"Error despachando vía UltraMsg: {e}")
+
+    # 2. Pasarela Whapi.Cloud (WhatsApp Gateway)
+    if "gate.whapi.cloud" in target_webhook:
+        try:
+            whapi_tok = token_val or apikey or ""
+            async with httpx.AsyncClient(timeout=12.0) as client:
+                res = await client.post(
+                    target_webhook,
+                    headers={"Authorization": f"Bearer {whapi_tok}", "Content-Type": "application/json"},
+                    json={
+                        "to": clean_digits,
+                        "body": message_text,
+                    },
+                )
+                if res.status_code in (200, 201):
+                    return {
+                        "success": True,
+                        "provider": "WHAPI_WHATSAPP",
+                        "status_code": res.status_code,
+                        "detail": f"¡Mensaje enviado automáticamente al WhatsApp (+{clean_digits}) vía Whapi!",
+                    }
+        except Exception as e:
+            logger.warning(f"Error despachando vía Whapi: {e}")
+
+    # 3. Si hay Webhook institucional configurado (Discord, Telegram, Zapier, Make o Custom)
     if target_webhook and target_webhook.startswith("http"):
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
@@ -1495,7 +1547,7 @@ def run_continuous_audit_task(session_id: str, camera_id: str, camera_label: str
             action = res.get("suggested_action", "Verificar de inmediato en el aula.")
 
             phone = _whatsapp_config.get("phone_number", "+573105551234")
-            _, wa_link = format_whatsapp_alert_message(
+            wa_msg, wa_link = format_whatsapp_alert_message(
                 camera_label=camera_label,
                 location=location,
                 incident_type=incident_type,
@@ -1549,8 +1601,22 @@ def run_continuous_audit_task(session_id: str, camera_id: str, camera_label: str
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
                     loop.create_task(webrtc_manager.broadcast_to_room(camera_id, alert_payload))
+                    if _whatsapp_config.get("auto_notify_alerts", True):
+                        loop.create_task(dispatch_automated_whatsapp(
+                            phone_number=phone,
+                            message_text=wa_msg,
+                            apikey=_whatsapp_config.get("callmebot_api_key"),
+                            webhook_url=_whatsapp_config.get("webhook_url"),
+                        ))
                 else:
                     asyncio.run(webrtc_manager.broadcast_to_room(camera_id, alert_payload))
+                    if _whatsapp_config.get("auto_notify_alerts", True):
+                        asyncio.run(dispatch_automated_whatsapp(
+                            phone_number=phone,
+                            message_text=wa_msg,
+                            apikey=_whatsapp_config.get("callmebot_api_key"),
+                            webhook_url=_whatsapp_config.get("webhook_url"),
+                        ))
             except Exception:
                 pass
     except Exception as e:
@@ -1798,7 +1864,51 @@ def update_whatsapp_config(payload: dict):
         _whatsapp_config["callmebot_api_key"] = payload["callmebot_api_key"].strip()
     if "webhook_url" in payload:
         _whatsapp_config["webhook_url"] = payload["webhook_url"].strip()
+    if "ultramsg_instance_id" in payload:
+        _whatsapp_config["ultramsg_instance_id"] = payload["ultramsg_instance_id"].strip()
+    if "ultramsg_token" in payload:
+        _whatsapp_config["ultramsg_token"] = payload["ultramsg_token"].strip()
     return _whatsapp_config
+
+
+@api_router.post("/cctv/whatsapp-dispatch", tags=["cctv-live"])
+async def dispatch_cctv_alert_to_whatsapp(payload: dict):
+    """
+    Envía directamente el reporte o alerta en 1 solo clic al WhatsApp del coordinador
+    vía UltraMsg, Whapi, CallMeBot o Webhooks, sin abrir pestañas ni requerir clics adicionales.
+    """
+    phone = payload.get("phone_number") or _whatsapp_config.get("phone_number", "+573145819221")
+    camera_label = payload.get("camera_label", "CCTV Escolar")
+    location = payload.get("location", camera_label)
+    incident_type = payload.get("incident_type", "FIGHT")
+    title = payload.get("title", "Alerta Crítica de Convivencia Escolar")
+    description = payload.get("description", "Se ha detectado una situación irregular.")
+    confidence = payload.get("confidence", "Alta fidelidad")
+    suggested_action = payload.get("suggested_action", "Verificar de inmediato en el aula bajo la Ley 1620.")
+
+    msg, link = format_whatsapp_alert_message(
+        camera_label=camera_label,
+        location=location,
+        incident_type=incident_type,
+        title=title,
+        description=description,
+        confidence=confidence,
+        suggested_action=suggested_action,
+        phone_number=phone,
+    )
+    auto_res = await dispatch_automated_whatsapp(
+        phone_number=phone,
+        message_text=msg,
+        apikey=_whatsapp_config.get("callmebot_api_key"),
+        webhook_url=_whatsapp_config.get("webhook_url"),
+    )
+    return {
+        "status": "ok" if auto_res.get("success") else "fallback_link_ready",
+        "phone_number": phone,
+        "message": msg,
+        "whatsapp_link": link,
+        "auto_dispatch": auto_res,
+    }
 
 
 @api_router.post("/cctv/whatsapp-test", tags=["cctv-live"])

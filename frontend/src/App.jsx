@@ -2565,10 +2565,25 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
     } catch (_e) {}
     return config?.webhook_url || ''
   })
+  const [ultramsgId, setUltramsgId] = useState(() => {
+    try {
+      const local = localStorage.getItem('nexia_whatsapp_config')
+      if (local) return JSON.parse(local).ultramsg_instance_id || ''
+    } catch (_e) {}
+    return config?.ultramsg_instance_id || ''
+  })
+  const [ultramsgToken, setUltramsgToken] = useState(() => {
+    try {
+      const local = localStorage.getItem('nexia_whatsapp_config')
+      if (local) return JSON.parse(local).ultramsg_token || ''
+    } catch (_e) {}
+    return config?.ultramsg_token || ''
+  })
   const [testResult, setTestResult] = useState(null)
   const [busy, setBusy] = useState(false)
   const [showKeyGuide, setShowKeyGuide] = useState(false)
   const [showWebhookGuide, setShowWebhookGuide] = useState(false)
+  const [showUltraGuide, setShowUltraGuide] = useState(false)
 
   useEffect(() => {
     if (config) {
@@ -2577,6 +2592,8 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
       setCoordinator(config.coordinator_name || 'Coordinador de Convivencia')
       if (config.callmebot_api_key) setApiKey(config.callmebot_api_key)
       if (config.webhook_url) setWebhookUrl(config.webhook_url)
+      if (config.ultramsg_instance_id) setUltramsgId(config.ultramsg_instance_id)
+      if (config.ultramsg_token) setUltramsgToken(config.ultramsg_token)
     }
   }, [config, isOpen])
 
@@ -2595,7 +2612,9 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
       auto_notify_alerts: autoNotify,
       coordinator_name: coordinator.trim(),
       callmebot_api_key: apiKey.trim(),
-      webhook_url: webhookUrl.trim()
+      webhook_url: webhookUrl.trim(),
+      ultramsg_instance_id: ultramsgId.trim(),
+      ultramsg_token: ultramsgToken.trim()
     }
     try {
       localStorage.setItem('nexia_whatsapp_config', JSON.stringify(newCfg))
@@ -2633,7 +2652,9 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
           phone_number: cleanNum.startsWith('57') ? '+' + cleanNum : phone,
           camera_label: 'Cámara Salón 201',
           callmebot_api_key: apiKey.trim(),
-          webhook_url: webhookUrl.trim()
+          webhook_url: webhookUrl.trim(),
+          ultramsg_instance_id: ultramsgId.trim(),
+          ultramsg_token: ultramsgToken.trim()
         })
       })
 
@@ -2647,7 +2668,7 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
         window.open(clientWaLink, '_blank')
         setTestResult({
           type: 'info',
-          text: `📲 Se abrió WhatsApp con el reporte. ${res?.auto_dispatch?.detail || 'Para envío automático sin abrir chats, usa un Webhook (Discord/Telegram) o tu clave API.'}`
+          text: `📲 Se abrió WhatsApp con el reporte. ${res?.auto_dispatch?.detail || 'Para envío automático sin abrir chats, usa UltraMsg o tu clave API.'}`
         })
       }
     } catch (_e) {
@@ -2715,19 +2736,70 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
             />
           </div>
 
-          {/* Opción 1: Webhook Directo (Discord / Telegram / Institucional) - ¡Recomendado para entrega inmediata! */}
+          {/* Opción 1: UltraMsg (WhatsApp Gateway Directo - 100% Automático mediante Código QR) */}
+          <div style={{ background: 'rgba(30, 41, 59, 0.8)', border: '1px solid rgba(37, 211, 102, 0.4)', padding: '14px', borderRadius: '14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <label style={{ fontSize: '0.82rem', color: '#25D366', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>🟢 Pasarela Oficial UltraMsg (Envío 100% Automático a WhatsApp):</span>
+                <span style={{ background: 'rgba(37, 211, 102, 0.2)', color: '#4ade80', fontSize: '0.68rem', padding: '1px 6px', borderRadius: '4px' }}>1 Clic</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowUltraGuide(g => !g)}
+                style={{ background: 'none', border: 'none', color: '#25D366', fontSize: '0.72rem', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
+              >
+                {showUltraGuide ? 'Ocultar guía' : '¿Cómo activarlo gratis?'}
+              </button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '6px' }}>
+              <div>
+                <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: '2px' }}>Instance ID:</label>
+                <input
+                  type="text"
+                  value={ultramsgId}
+                  onChange={e => setUltramsgId(e.target.value)}
+                  placeholder="instance12345"
+                  style={{ width: '100%', padding: '8px 10px', background: 'rgba(15, 23, 42, 0.9)', border: '1px solid rgba(37, 211, 102, 0.3)', borderRadius: '8px', color: '#fff', fontSize: '0.82rem', fontFamily: 'monospace' }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: '2px' }}>Token:</label>
+                <input
+                  type="text"
+                  value={ultramsgToken}
+                  onChange={e => setUltramsgToken(e.target.value)}
+                  placeholder="Token de UltraMsg"
+                  style={{ width: '100%', padding: '8px 10px', background: 'rgba(15, 23, 42, 0.9)', border: '1px solid rgba(37, 211, 102, 0.3)', borderRadius: '8px', color: '#fff', fontSize: '0.82rem', fontFamily: 'monospace' }}
+                />
+              </div>
+            </div>
+            {showUltraGuide && (
+              <div style={{ marginTop: '8px', background: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(37, 211, 102, 0.3)', padding: '10px 12px', borderRadius: '10px', fontSize: '0.76rem', color: '#cbd5e1', lineHeight: 1.5 }}>
+                <p style={{ margin: '0 0 6px', fontWeight: 800, color: '#4ade80' }}>
+                  ⚡ Envío a WhatsApp sin abrir chats ni requerir segundas confirmaciones:
+                </p>
+                <ol style={{ margin: '0 0 6px', paddingLeft: '18px', color: '#94a3b8', fontSize: '0.74rem' }}>
+                  <li>Ingresa a <a href="https://ultramsg.com" target="_blank" rel="noreferrer" style={{ color: '#25D366' }}>ultramsg.com</a> y crea una cuenta de prueba gratis (en 30 segundos, sin tarjeta).</li>
+                  <li>Escanea el <strong>Código QR</strong> en pantalla con tu WhatsApp (en <em>Dispositivos vinculados</em>).</li>
+                  <li>Copia el <strong>Instance ID</strong> y el <strong>Token</strong> y pégalos aquí arriba.</li>
+                  <li>¡Listo! A partir de ese momento, al dar clic a <em>"Notificar a WhatsApp"</em> el mensaje llegará directo al número del directivo en su WhatsApp personal automáticamente.</li>
+                </ol>
+              </div>
+            )}
+          </div>
+
+          {/* Opción 2: Webhook Directo (Discord / Telegram / Institucional) */}
           <div style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(139, 92, 246, 0.35)', padding: '12px', borderRadius: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
               <label style={{ fontSize: '0.8rem', color: '#a78bfa', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span>🚀 Webhook Instantáneo (Discord / Telegram / Zapier):</span>
-                <span style={{ background: 'rgba(167, 139, 250, 0.2)', color: '#c4b5fd', fontSize: '0.68rem', padding: '1px 6px', borderRadius: '4px' }}>Recomendado</span>
+                <span>🚀 Webhook Alternativo (Discord / Telegram / Zapier):</span>
               </label>
               <button
                 type="button"
                 onClick={() => setShowWebhookGuide(g => !g)}
                 style={{ background: 'none', border: 'none', color: '#a78bfa', fontSize: '0.72rem', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
               >
-                {showWebhookGuide ? 'Ocultar guía Discord' : '¿Cómo usar con Discord?'}
+                {showWebhookGuide ? 'Ocultar' : 'Ver guía'}
               </button>
             </div>
             <input
@@ -2737,22 +2809,9 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
               placeholder="https://discord.com/api/webhooks/... o webhook URL"
               style={{ width: '100%', padding: '9px 12px', background: 'rgba(15, 23, 42, 0.9)', border: '1px solid rgba(139, 92, 246, 0.4)', borderRadius: '8px', color: '#fff', fontSize: '0.85rem', fontFamily: 'monospace' }}
             />
-            {showWebhookGuide && (
-              <div style={{ marginTop: '8px', background: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(139, 92, 246, 0.4)', padding: '10px 12px', borderRadius: '10px', fontSize: '0.76rem', color: '#cbd5e1', lineHeight: 1.5 }}>
-                <p style={{ margin: '0 0 4px', fontWeight: 800, color: '#c4b5fd' }}>
-                  📱 Alerta directa a tu celular vía Discord (Toma 20 segundos y nunca se cae):
-                </p>
-                <ol style={{ margin: '0 0 6px', paddingLeft: '18px', color: '#94a3b8', fontSize: '0.74rem' }}>
-                  <li>Abre Discord en tu PC o celular y entra a tu servidor (o crea uno privado "NEXIA").</li>
-                  <li>Ve a <strong>Ajustes del Canal (⚙️) ➡️ Integraciones ➡️ Webhooks ➡️ Crear Webhook</strong>.</li>
-                  <li>Haz clic en <strong>"Copiar URL de Webhook"</strong> y pégala en esta casilla.</li>
-                  <li>¡Listo! Tu celular sonará y vibrará con el reporte completo y oficial de Ley 1620 al instante.</li>
-                </ol>
-              </div>
-            )}
           </div>
 
-          {/* Opción 2: Clave API CallMeBot (Para WhatsApp directo cuando el bot responda) */}
+          {/* Opción 3: Clave API CallMeBot (Para WhatsApp directo cuando el bot responda) */}
           <div style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(56, 189, 248, 0.25)', padding: '12px', borderRadius: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
               <label style={{ fontSize: '0.8rem', color: '#38bdf8', fontWeight: 700, margin: 0 }}>
@@ -2773,26 +2832,6 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
               placeholder="Pega aquí tu API Key (ej. 839201)"
               style={{ width: '100%', padding: '9px 12px', background: 'rgba(15, 23, 42, 0.9)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '8px', color: '#fff', fontSize: '0.9rem', fontFamily: 'monospace' }}
             />
-            {showKeyGuide && (
-              <div style={{ marginTop: '8px', background: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '12px', borderRadius: '10px', fontSize: '0.78rem', color: '#cbd5e1', lineHeight: 1.5 }}>
-                <p style={{ margin: '0 0 6px', fontWeight: 800, color: '#38bdf8' }}>
-                  🔑 Estado de la API CallMeBot:
-                </p>
-                <p style={{ margin: '0 0 8px', fontSize: '0.75rem', color: '#94a3b8' }}>
-                  Los servidores gratuitos de CallMeBot en España sufren saturaciones recurrentes por alta demanda mundial. Si tu mensaje <code>I allow callmebot to send me messages</code> quedó en visto, el bot puede tardar en procesar la cola. En cuanto te responda con la clave, pégala aquí.
-                </p>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
-                  <a
-                    href="https://wa.me/34623786449?text=I%20allow%20callmebot%20to%20send%20me%20messages"
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{ background: '#25D366', color: '#fff', textDecoration: 'none', padding: '7px 14px', borderRadius: '8px', fontWeight: 800, fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '6px', boxShadow: '0 2px 8px rgba(37, 211, 102, 0.4)' }}
-                  >
-                    🟢 Abrir Bot (+34 623 78 64 49)
-                  </a>
-                </div>
-              </div>
-            )}
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(30, 41, 59, 0.5)', padding: '10px 12px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
@@ -2852,8 +2891,36 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
    ========================================================================= */
 function LiveIncidentAlertModal({ alert, onClose, onFileReport }) {
   if (!alert) return null
+  const [dispatching, setDispatching] = useState(false)
+  const [dispatchResult, setDispatchResult] = useState(null)
 
-  const handleOpenWhatsApp = () => {
+  const handleOpenWhatsApp = async () => {
+    setDispatching(true)
+    setDispatchResult(null)
+    try {
+      const res = await apiRequest('/cctv/whatsapp-dispatch', {
+        method: 'POST',
+        body: JSON.stringify({
+          camera_label: alert.camera_label,
+          incident_type: alert.incident_type,
+          confidence: alert.confidence,
+          description: alert.description,
+          suggested_action: alert.suggested_action,
+        })
+      })
+      if (res?.auto_dispatch?.success) {
+        setDispatchResult({
+          type: 'success',
+          text: `🚀 ${res.auto_dispatch.detail || '¡Reporte enviado de forma 100% automática al WhatsApp oficial!'}`
+        })
+        setDispatching(false)
+        return
+      }
+    } catch (_err) {
+      // Continuar a fallback de enlace nativo
+    }
+
+    // Fallback: Si no hay pasarela en segundo plano activa, abre el enlace nativo directo
     let link = alert.whatsapp_link
     if (!link) {
       const localCfg = (() => {
@@ -2867,6 +2934,11 @@ function LiveIncidentAlertModal({ alert, onClose, onFileReport }) {
       link = `https://wa.me/${ph}?text=${encodeURIComponent(msg)}`
     }
     window.open(link, '_blank')
+    setDispatchResult({
+      type: 'info',
+      text: '📲 Se abrió WhatsApp con el reporte. Para envío directo en segundo plano sin abrir chats, configura UltraMsg en Ajustes.'
+    })
+    setDispatching(false)
   }
 
   return (
@@ -2931,18 +3003,34 @@ function LiveIncidentAlertModal({ alert, onClose, onFileReport }) {
           <button
             className="button primary"
             onClick={handleOpenWhatsApp}
+            disabled={dispatching}
             style={{
               padding: '12px 18px',
               justifyContent: 'center',
               fontWeight: 800,
               fontSize: '0.92rem',
-              background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)',
+              background: dispatchResult?.type === 'success' ? '#10b981' : 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)',
               border: 'none',
               boxShadow: '0 4px 15px rgba(37, 211, 102, 0.4)'
             }}
           >
-            📲 Notificar a WhatsApp Oficial Ahora
+            {dispatching ? '⏳ Enviando reporte a WhatsApp...' : (dispatchResult?.type === 'success' ? '✅ ¡Reporte Enviado a WhatsApp Directivas!' : '📲 Notificar a WhatsApp Oficial Ahora (1 Clic)')}
           </button>
+
+          {dispatchResult && (
+            <div style={{
+              background: dispatchResult.type === 'success' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(56, 189, 248, 0.15)',
+              border: dispatchResult.type === 'success' ? '1px solid #10b981' : '1px solid #38bdf8',
+              padding: '10px 14px',
+              borderRadius: '10px',
+              color: dispatchResult.type === 'success' ? '#34d399' : '#38bdf8',
+              fontSize: '0.82rem',
+              textAlign: 'center',
+              lineHeight: 1.4
+            }}>
+              {dispatchResult.text}
+            </div>
+          )}
           <div style={{ display: 'flex', gap: '8px' }}>
             {onFileReport && (
               <button
