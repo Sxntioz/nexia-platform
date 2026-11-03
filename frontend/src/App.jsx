@@ -5048,6 +5048,12 @@ function AdminCameras({ user }) {
 }
 
 function AdminRecordings({ user }) {
+  const getNowLocalDateTime = () => {
+    const now = new Date()
+    const pad = n => String(n).padStart(2, '0')
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`
+  }
+
   const [recordings, setRecordings] = useState([])
   const [previewModal, setPreviewModal] = useState(false)
   const [previewRec, setPreviewRec] = useState(null)
@@ -5057,10 +5063,12 @@ function AdminRecordings({ user }) {
   const [uploadProgress, setUploadProgress] = useState(null)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filterCamera, setFilterCamera] = useState('ALL')
 
   const [form, setForm] = useState({
     camera_id: '',
-    recording_started_at: '',
+    recording_started_at: getNowLocalDateTime(),
     duration_seconds: '960',
   })
   const [file, setFile] = useState(null)
@@ -5074,11 +5082,25 @@ function AdminRecordings({ user }) {
   })
   const [editingBusy, setEditingBusy] = useState(false)
 
+  const filteredRecordings = useMemo(() => {
+    return recordings.filter(r => {
+      if (filterCamera !== 'ALL' && r.camera_id !== filterCamera) return false
+      if (!searchTerm) return true
+      const q = searchTerm.toLowerCase().trim()
+      const camLabel = (r.camera_label || '').toLowerCase()
+      const camLoc = (r.camera_location || '').toLowerCase()
+      const origName = (r.original_name || '').toLowerCase()
+      return camLabel.includes(q) || camLoc.includes(q) || origName.includes(q)
+    })
+  }, [recordings, filterCamera, searchTerm])
+
   const openEditModal = (rec) => {
     setEditingRec(rec)
     const d = new Date(rec.recording_started_at)
     const pad = n => String(n).padStart(2, '0')
-    const dtLocal = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+    const dtLocal = !isNaN(d.getTime())
+      ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+      : getNowLocalDateTime()
     setEditForm({
       camera_id: rec.camera_id,
       original_name: rec.original_name || '',
@@ -5102,7 +5124,7 @@ function AdminRecordings({ user }) {
           duration_seconds: parseInt(editForm.duration_seconds, 10) || undefined,
         }),
       })
-      setSuccess('Grabación actualizada exitosamente.')
+      setSuccess(`Grabación "${editForm.original_name || 'seleccionada'}" actualizada exitosamente.`)
       setEditModal(false)
       setEditingRec(null)
       await load()
@@ -5123,7 +5145,11 @@ function AdminRecordings({ user }) {
       setRecordings(recs)
       setCameras(cams)
       if (cams.length > 0 && !form.camera_id) {
-        setForm(f => ({ ...f, camera_id: cams[0].id }))
+        setForm(f => ({
+          ...f,
+          camera_id: cams[0].id,
+          recording_started_at: f.recording_started_at || getNowLocalDateTime()
+        }))
       }
     } catch (e) {
       setError(e.message)
@@ -5180,13 +5206,15 @@ function AdminRecordings({ user }) {
     }
   }
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('¿Deseas eliminar esta grabación del depósito?')) return
+  const handleDelete = async (rec) => {
+    const title = rec.original_name || rec.camera_label || 'esta grabación'
+    if (!window.confirm(`¿Deseas eliminar "${title}" del depósito?\n\nEsta acción liberará permanentemente el espacio de almacenamiento tanto en la base de datos como en AWS S3.`)) return
     try {
-      await apiRequest(`/admin/recordings/${id}`, { method: 'DELETE' })
+      const res = await apiRequest(`/admin/recordings/${rec.id}`, { method: 'DELETE' })
+      setSuccess(res?.message || `Grabación "${title}" eliminada correctamente y espacio liberado en AWS S3.`)
       await load()
     } catch (err) {
-      alert(err.message)
+      alert(`Error al eliminar grabación: ${err.message}`)
     }
   }
 
@@ -5269,60 +5297,187 @@ function AdminRecordings({ user }) {
           </section>
 
           <section className="admin-card">
-            <h3>Grabaciones almacenadas ({recordings.length})</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '14px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>Grabaciones almacenadas ({recordings.length})</h3>
+                <small style={{ color: 'var(--text-muted)' }}>
+                  {filteredRecordings.length !== recordings.length
+                    ? `Mostrando ${filteredRecordings.length} de ${recordings.length} grabaciones`
+                    : 'Listado completo sincronizado'}
+                </small>
+              </div>
+              <button
+                type="button"
+                className="button ghost small"
+                onClick={load}
+                disabled={busy}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                title="Sincronizar grabaciones con el servidor"
+              >
+                🔄 Sincronizar
+              </button>
+            </div>
+
+            {/* Barra de filtros y búsqueda */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', marginBottom: '14px' }}>
+              <input
+                type="search"
+                placeholder="🔍 Buscar por nombre, salón o cámara…"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                style={{ fontSize: '0.85rem', padding: '8px 12px' }}
+              />
+              <select
+                value={filterCamera}
+                onChange={e => setFilterCamera(e.target.value)}
+                style={{ fontSize: '0.85rem', padding: '8px 12px' }}
+              >
+                <option value="ALL">Todas las cámaras ({cameras.length})</option>
+                {cameras.map(c => (
+                  <option key={c.id} value={c.id}>{c.label} ({c.location || 'Sin salón'})</option>
+                ))}
+              </select>
+            </div>
+
             {busy ? (
               <div style={{ padding: '30px', textAlign: 'center' }}>Cargando grabaciones…</div>
-            ) : recordings.length === 0 ? (
+            ) : filteredRecordings.length === 0 ? (
               <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                No hay grabaciones cargadas en el depósito.
+                {recordings.length === 0
+                  ? 'No hay grabaciones cargadas en el depósito.'
+                  : 'No se encontraron grabaciones con los filtros aplicados.'}
               </div>
             ) : (
-              <div className="table-wrap" style={{ marginTop: '14px' }}>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Cámara / Ubicación</th>
-                      <th>Inicio</th>
-                      <th>Duración</th>
-                      <th>Tamaño</th>
-                      <th>Acción</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recordings.map(r => (
-                      <tr key={r.id}>
-                        <td>
-                          <strong>{r.camera_label}</strong>
-                          <small style={{ display: 'block', color: 'var(--text-muted)' }}>{r.camera_location}</small>
-                        </td>
-                        <td>
-                          {new Date(r.recording_started_at).toLocaleDateString()}{' '}
-                          <small>{new Date(r.recording_started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small>
-                        </td>
-                        <td>{Math.floor(r.duration_seconds / 60)}m {r.duration_seconds % 60}s</td>
-                        <td>{(r.size_bytes / (1024 * 1024)).toFixed(1)} MB</td>
-                        <td>
-                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                            <button
-                              className="button primary small"
-                              onClick={() => { setPreviewRec(r); setPreviewModal(true); }}
-                              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                            >
-                              <Icon name="video" size={13} /> Ver Grabación
-                            </button>
-                            <button className="button secondary small" onClick={() => openEditModal(r)}>
-                              Editar
-                            </button>
-                            <button className="button danger-outline small" onClick={() => handleDelete(r.id)}>
-                              Eliminar
-                            </button>
+              <>
+                {/* VISTA DESKTOP: TABLA COMPACTA */}
+                <div className="recordings-desktop-table">
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Cámara / Ubicación</th>
+                          <th>Inicio</th>
+                          <th>Duración</th>
+                          <th>Tamaño</th>
+                          <th style={{ textAlign: 'right' }}>Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredRecordings.map(r => (
+                          <tr key={r.id}>
+                            <td>
+                              <strong>{r.camera_label || 'Cámara'}</strong>
+                              <small style={{ display: 'block', color: 'var(--text-muted)' }}>{r.camera_location || 'Ubicación'}</small>
+                              <div style={{ fontSize: '0.78rem', color: 'var(--accent-cyan)', marginTop: '2px', wordBreak: 'break-all' }}>
+                                {r.original_name}
+                              </div>
+                            </td>
+                            <td>
+                              {new Date(r.recording_started_at).toLocaleDateString()}{' '}
+                              <small>{new Date(r.recording_started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small>
+                            </td>
+                            <td>{Math.floor(r.duration_seconds / 60)}m {r.duration_seconds % 60}s</td>
+                            <td>{(r.size_bytes / (1024 * 1024)).toFixed(1)} MB</td>
+                            <td style={{ textAlign: 'right' }}>
+                              <div style={{ display: 'inline-flex', gap: '6px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                                <button
+                                  className="button primary small"
+                                  onClick={() => { setPreviewRec(r); setPreviewModal(true); }}
+                                  style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                  title="Reproducir grabación"
+                                >
+                                  <Icon name="video" size={13} /> Ver
+                                </button>
+                                <button
+                                  className="button secondary small"
+                                  onClick={() => openEditModal(r)}
+                                  title="Editar información"
+                                >
+                                  ✏️ Editar
+                                </button>
+                                <button
+                                  className="button danger-outline small"
+                                  onClick={() => handleDelete(r)}
+                                  title="Eliminar de AWS S3 y base de datos"
+                                >
+                                  🗑️
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* VISTA MÓVIL: TARJETAS RESPONSIVE COMPLETAS */}
+                <div className="recordings-mobile-cards">
+                  {filteredRecordings.map(r => (
+                    <article key={r.id} className="recording-card-item">
+                      <div className="recording-card-header">
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                            <strong style={{ fontSize: '0.95rem', color: '#f8fafc' }}>
+                              {r.camera_label || 'Cámara'}
+                            </strong>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                              • {r.camera_location || 'Sin salón'}
+                            </span>
                           </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                          <div className="recording-card-title" style={{ marginTop: '3px', color: 'var(--accent-cyan)' }}>
+                            {r.original_name || 'Grabación de seguridad'}
+                          </div>
+                        </div>
+                        <span className="recording-size-badge">
+                          {(r.size_bytes / (1024 * 1024)).toFixed(1)} MB
+                        </span>
+                      </div>
+
+                      <div className="recording-card-meta">
+                        <div className="recording-meta-field">
+                          <span className="recording-meta-label">📅 Inicio</span>
+                          <span className="recording-meta-val">
+                            {new Date(r.recording_started_at).toLocaleDateString()}{' '}
+                            {new Date(r.recording_started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <div className="recording-meta-field">
+                          <span className="recording-meta-label">⏱️ Duración</span>
+                          <span className="recording-meta-val">
+                            {Math.floor(r.duration_seconds / 60)}m {r.duration_seconds % 60}s
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="recording-card-actions">
+                        <button
+                          className="button primary btn-play"
+                          onClick={() => { setPreviewRec(r); setPreviewModal(true); }}
+                          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                        >
+                          <Icon name="video" size={14} /> Ver Grabación
+                        </button>
+                        <button
+                          className="button secondary btn-edit"
+                          onClick={() => openEditModal(r)}
+                          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                        >
+                          ✏️ Editar
+                        </button>
+                        <button
+                          className="button danger-outline btn-delete"
+                          onClick={() => handleDelete(r)}
+                          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                          title="Eliminar grabación"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </>
             )}
           </section>
         </div>
@@ -5379,13 +5534,24 @@ function AdminRecordings({ user }) {
 
         {/* Modal de edición de grabación */}
         {editModal && editingRec && (
-          <div className="modal-backdrop" onClick={() => !editingBusy && setEditModal(false)}>
-            <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+          <div className="modal-overlay" onClick={() => !editingBusy && setEditModal(false)}>
+            <div className="modal-dialog" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px', width: '95vw', padding: '24px' }}>
               <div className="modal-header">
-                <h3>Editar Grabación</h3>
-                <button className="close-button" onClick={() => !editingBusy && setEditModal(false)}>✕</button>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>Editar Grabación</h3>
+                  <small style={{ color: 'var(--accent-cyan)', fontWeight: 600 }}>
+                    {editingRec.camera_label || 'Grabación'} • ID: {editingRec.id?.slice(0, 8)}…
+                  </small>
+                </div>
+                <button
+                  className="auth-close-btn"
+                  onClick={() => !editingBusy && setEditModal(false)}
+                  aria-label="Cerrar modal de edición"
+                >
+                  <Icon name="close" size={18} />
+                </button>
               </div>
-              <form onSubmit={handleSaveEdit} style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '14px' }}>
+              <form onSubmit={handleSaveEdit} style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '16px' }}>
                 <label>
                   Nombre / Etiqueta del video
                   <input
@@ -5394,6 +5560,7 @@ function AdminRecordings({ user }) {
                     onChange={e => setEditForm({ ...editForm, original_name: e.target.value })}
                     placeholder="Ej: Camara Salon 303.mp4"
                     disabled={editingBusy}
+                    required
                   />
                 </label>
                 <label>
@@ -5433,12 +5600,13 @@ function AdminRecordings({ user }) {
                     {Math.floor(Number(editForm.duration_seconds || 0) / 60)} min {Number(editForm.duration_seconds || 0) % 60} seg
                   </small>
                 </label>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '14px', flexWrap: 'wrap' }}>
                   <button
                     type="button"
                     className="button secondary"
                     onClick={() => setEditModal(false)}
                     disabled={editingBusy}
+                    style={{ flex: 1 }}
                   >
                     Cancelar
                   </button>
@@ -5446,8 +5614,9 @@ function AdminRecordings({ user }) {
                     type="submit"
                     className="button primary"
                     disabled={editingBusy}
+                    style={{ flex: 2 }}
                   >
-                    {editingBusy ? 'Guardando…' : 'Guardar Cambios'}
+                    {editingBusy ? 'Guardando…' : '💾 Guardar Cambios'}
                   </button>
                 </div>
               </form>

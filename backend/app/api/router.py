@@ -473,7 +473,9 @@ def list_recordings(
     db: Session = Depends(get_db),
 ) -> list[dict]:
     recordings = db.scalars(
-        select(CameraRecording).options(joinedload(CameraRecording.camera)).order_by(desc(CameraRecording.recording_started_at))
+        select(CameraRecording)
+        .options(joinedload(CameraRecording.camera))
+        .order_by(desc(CameraRecording.created_at), desc(CameraRecording.recording_started_at))
     ).all()
     return [
         {
@@ -660,20 +662,32 @@ def delete_recording(
     rec = db.get(CameraRecording, recording_id)
     if not rec:
         raise HTTPException(status_code=404, detail="Grabación no encontrada")
+    
+    # 1. Liberar espacio en AWS S3
     if is_s3_enabled():
         try:
             delete_file_from_s3(rec.stored_name)
-        except Exception:
-            pass
+            logger.info(f"Archivo {rec.stored_name} eliminado exitosamente de AWS S3 para liberar almacenamiento.")
+        except Exception as e:
+            logger.warning(f"Error al eliminar {rec.stored_name} de AWS S3: {e}")
+
+    # 2. Liberar espacio local si existe copia en disco
     path = settings.upload_dir / rec.stored_name
     if path.is_file():
         try:
             path.unlink()
-        except Exception:
-            pass
+            logger.info(f"Archivo local {path} eliminado.")
+        except Exception as e:
+            logger.warning(f"Error al eliminar archivo local {path}: {e}")
+
+    # 3. Limpiar sesión de transmisión activa si apuntaba a esta grabación
+    for sid, sess in list(_active_broadcasts.items()):
+        if getattr(sess, "recording_id", None) == recording_id:
+            _active_broadcasts.pop(sid, None)
+
     db.delete(rec)
     db.commit()
-    return {"message": "Grabación eliminada correctamente"}
+    return {"message": "Grabación eliminada correctamente y espacio liberado en AWS S3"}
 
 
 @api_router.get("/recordings/{recording_id}/stream", tags=["recordings"])

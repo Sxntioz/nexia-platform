@@ -3304,6 +3304,136 @@ tr:hover td { background: var(--bg-surface-elevated); }
   }
 }
 
+/* ==========================================================
+   RESPONSIVE RECORDINGS REPOSITORY (MOBILE CARDS & DESKTOP TABLE)
+   ========================================================== */
+.recordings-desktop-table {
+  display: block;
+  width: 100%;
+}
+
+.recordings-mobile-cards {
+  display: none;
+}
+
+@media (max-width: 820px) {
+  .recordings-desktop-table {
+    display: none !important;
+  }
+
+  .recordings-mobile-cards {
+    display: flex !important;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    margin-top: 10px;
+  }
+
+  .recording-card-item {
+    background: linear-gradient(145deg, rgba(17, 24, 39, 0.95), rgba(15, 23, 42, 0.92));
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 15px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);
+    transition: transform 0.15s ease, border-color 0.15s ease;
+  }
+
+  .recording-card-item:active {
+    transform: scale(0.99);
+  }
+
+  .recording-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .recording-card-title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #f1f5f9;
+    word-break: break-word;
+    line-height: 1.35;
+  }
+
+  .recording-size-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(16, 185, 129, 0.12);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 8px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .recording-card-meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    background: rgba(0, 0, 0, 0.28);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    padding: 9px 12px;
+  }
+
+  .recording-meta-field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .recording-meta-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-dim, #64748b);
+    font-weight: 600;
+  }
+
+  .recording-meta-val {
+    font-size: 0.82rem;
+    color: #e2e8f0;
+    font-weight: 600;
+  }
+
+  .recording-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 2px;
+  }
+
+  .recording-card-actions .button {
+    font-size: 0.84rem;
+    padding: 8px 10px;
+  }
+
+  .recording-card-actions .btn-play {
+    flex: 2;
+  }
+
+  .recording-card-actions .btn-edit {
+    flex: 1;
+  }
+
+  .recording-card-actions .btn-delete {
+    flex: 0 0 42px;
+    padding: 8px 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
 /* Tactical CCTV HUD Overlay Elements */
 .cctv-tactical-hud-overlay {
   position: absolute;
