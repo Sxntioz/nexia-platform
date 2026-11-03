@@ -1326,7 +1326,8 @@ async def dispatch_automated_whatsapp(
 
     if "api.ultramsg.com" in target_webhook or (inst_id and token_val):
         try:
-            target_url = target_webhook if ("api.ultramsg.com" in target_webhook) else f"https://api.ultramsg.com/{inst_id}/messages/chat"
+            clean_inst = inst_id if inst_id.startswith("instance") else f"instance{inst_id}"
+            target_url = target_webhook if ("api.ultramsg.com" in target_webhook) else f"https://api.ultramsg.com/{clean_inst}/messages/chat"
             async with httpx.AsyncClient(timeout=12.0) as client:
                 data = {
                     "token": token_val or apikey or "",
