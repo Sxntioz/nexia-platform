@@ -2597,6 +2597,25 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
     }
   }, [config, isOpen])
 
+  // Cargar configuración persistida del servidor siempre que se abra el modal
+  useEffect(() => {
+    if (isOpen) {
+      apiRequest('/cctv/whatsapp-config')
+        .then(serverCfg => {
+          if (serverCfg) {
+            if (serverCfg.phone_number) setPhone(serverCfg.phone_number)
+            if (serverCfg.auto_notify_alerts !== undefined) setAutoNotify(serverCfg.auto_notify_alerts)
+            if (serverCfg.coordinator_name) setCoordinator(serverCfg.coordinator_name)
+            if (serverCfg.callmebot_api_key) setApiKey(serverCfg.callmebot_api_key)
+            if (serverCfg.webhook_url) setWebhookUrl(serverCfg.webhook_url)
+            if (serverCfg.ultramsg_instance_id) setUltramsgId(serverCfg.ultramsg_instance_id)
+            if (serverCfg.ultramsg_token) setUltramsgToken(serverCfg.ultramsg_token)
+          }
+        })
+        .catch(() => {})
+    }
+  }, [isOpen])
+
   if (!isOpen) return null
 
   const handleSave = async (e) => {
@@ -2663,6 +2682,11 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
           type: 'success',
           text: `🚀 ${res.auto_dispatch.detail || '¡Mensaje despachado automáticamente sin necesidad de abrir el chat!'}`
         })
+      } else if (ultramsgId.trim() && ultramsgToken.trim()) {
+        setTestResult({
+          type: 'error',
+          text: `⚠️ UltraMsg rechazó la solicitud: ${res?.auto_dispatch?.detail || 'Verifica que la instancia esté autenticada con el QR y que el Token sea idéntico al de UltraMsg.'}`
+        })
       } else {
         // Fallback a enlace nativo si aún no tiene API Key configurada
         window.open(clientWaLink, '_blank')
@@ -2683,199 +2707,244 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose} style={{ zIndex: 1200 }}>
+    <div
+      className="modal-backdrop"
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0, 0, 0, 0.85)',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 2000,
+        padding: '16px',
+        overflow: 'hidden'
+      }}
+    >
       <div
         className="modal-dialog"
         onClick={e => e.stopPropagation()}
-        style={{ maxWidth: '540px', background: 'rgba(15, 23, 42, 0.98)', border: '1px solid rgba(37, 211, 102, 0.4)', borderRadius: '20px', padding: '26px' }}
+        style={{
+          maxWidth: '560px',
+          width: '100%',
+          maxHeight: 'min(92vh, 740px)',
+          background: 'rgba(15, 23, 42, 0.98)',
+          border: '1px solid rgba(37, 211, 102, 0.4)',
+          borderRadius: '20px',
+          padding: 0,
+          position: 'relative',
+          boxShadow: '0 25px 60px rgba(0, 0, 0, 0.95)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden'
+        }}
       >
-        <button className="auth-close-btn" onClick={onClose} aria-label="Cerrar modal">
-          <Icon name="close" size={18} />
-        </button>
+        <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', height: '100%', maxHeight: 'min(92vh, 740px)', margin: 0, overflow: 'hidden' }}>
+          {/* Header fijo superior */}
+          <div style={{ padding: '20px 24px 12px', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', flexShrink: 0, position: 'relative' }}>
+            <button className="auth-close-btn" type="button" onClick={onClose} aria-label="Cerrar modal" style={{ position: 'absolute', top: '16px', right: '16px' }}>
+              <Icon name="close" size={18} />
+            </button>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-          <span style={{ fontSize: '1.8rem' }}>📲</span>
-          <div>
-            <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800 }}>Enlace y Envío Automático WhatsApp IA</h2>
-            <small style={{ color: 'var(--text-muted)' }}>Notificaciones automáticas e inmediatas a directivos</small>
-          </div>
-        </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '1.7rem' }}>📲</span>
+              <div>
+                <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800 }}>Enlace y Envío Automático WhatsApp IA</h2>
+                <small style={{ color: 'var(--text-muted)' }}>Notificaciones automáticas e inmediatas a directivos</small>
+              </div>
+            </div>
 
-        <p style={{ fontSize: '0.86rem', color: '#94a3b8', lineHeight: 1.5, margin: '8px 0 14px' }}>
-          Configura la línea oficial a la cual el Motor Gemini IA enviará alertas instantáneas (con fecha, hora, cámara, diagnóstico y recomendación de Ley 1620) al detectar anomalías durante la transmisión.
-        </p>
-
-        <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div>
-            <label style={{ fontSize: '0.8rem', color: '#e2e8f0', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
-              Número de Teléfono / WhatsApp Institucional:
-            </label>
-            <input
-              type="text"
-              value={phone}
-              onChange={e => setPhone(e.target.value)}
-              placeholder="+57 310 123 4567"
-              required
-              style={{ width: '100%', padding: '10px 12px', background: 'rgba(30, 41, 59, 0.8)', border: '1px solid rgba(255, 255, 255, 0.15)', borderRadius: '10px', color: '#fff', fontSize: '0.95rem', fontFamily: 'monospace' }}
-            />
-            <small style={{ color: 'var(--text-muted)', fontSize: '0.74rem', marginTop: '3px', display: 'block' }}>
-              Número con indicativo de país (ej. +573145819221).
-            </small>
+            <p style={{ fontSize: '0.82rem', color: '#94a3b8', lineHeight: 1.4, margin: '8px 0 0' }}>
+              Configura la línea oficial a la cual el Motor Gemini IA enviará alertas instantáneas (con fecha, hora, cámara, diagnóstico y recomendación de Ley 1620) al detectar anomalías durante la transmisión.
+            </p>
           </div>
 
-          <div>
-            <label style={{ fontSize: '0.8rem', color: '#e2e8f0', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
-              Cargo o Responsable Receptor:
-            </label>
-            <input
-              type="text"
-              value={coordinator}
-              onChange={e => setCoordinator(e.target.value)}
-              placeholder="Coordinador de Convivencia / Rectoría"
-              style={{ width: '100%', padding: '10px 12px', background: 'rgba(30, 41, 59, 0.8)', border: '1px solid rgba(255, 255, 255, 0.15)', borderRadius: '10px', color: '#fff', fontSize: '0.9rem' }}
-            />
-          </div>
-
-          {/* Opción 1: UltraMsg (WhatsApp Gateway Directo - 100% Automático mediante Código QR) */}
-          <div style={{ background: 'rgba(30, 41, 59, 0.8)', border: '1px solid rgba(37, 211, 102, 0.4)', padding: '14px', borderRadius: '14px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-              <label style={{ fontSize: '0.82rem', color: '#25D366', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span>🟢 Pasarela Oficial UltraMsg (Envío 100% Automático a WhatsApp):</span>
-                <span style={{ background: 'rgba(37, 211, 102, 0.2)', color: '#4ade80', fontSize: '0.68rem', padding: '1px 6px', borderRadius: '4px' }}>1 Clic</span>
+          {/* Cuerpo con scroll propio suave */}
+          <div style={{ flex: '1 1 auto', overflowY: 'auto', padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div>
+              <label style={{ fontSize: '0.8rem', color: '#e2e8f0', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
+                Número de Teléfono / WhatsApp Institucional:
               </label>
-              <button
-                type="button"
-                onClick={() => setShowUltraGuide(g => !g)}
-                style={{ background: 'none', border: 'none', color: '#25D366', fontSize: '0.72rem', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
-              >
-                {showUltraGuide ? 'Ocultar guía' : '¿Cómo activarlo gratis?'}
-              </button>
+              <input
+                type="text"
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                placeholder="+57 310 123 4567"
+                required
+                style={{ width: '100%', padding: '10px 12px', background: 'rgba(30, 41, 59, 0.8)', border: '1px solid rgba(255, 255, 255, 0.15)', borderRadius: '10px', color: '#fff', fontSize: '0.95rem', fontFamily: 'monospace' }}
+              />
+              <small style={{ color: 'var(--text-muted)', fontSize: '0.74rem', marginTop: '3px', display: 'block' }}>
+                Número con indicativo de país (ej. +573145819221).
+              </small>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '6px' }}>
-              <div>
-                <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: '2px' }}>Instance ID:</label>
-                <input
-                  type="text"
-                  value={ultramsgId}
-                  onChange={e => setUltramsgId(e.target.value)}
-                  placeholder="instance12345"
-                  style={{ width: '100%', padding: '8px 10px', background: 'rgba(15, 23, 42, 0.9)', border: '1px solid rgba(37, 211, 102, 0.3)', borderRadius: '8px', color: '#fff', fontSize: '0.82rem', fontFamily: 'monospace' }}
-                />
-              </div>
-              <div>
-                <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: '2px' }}>Token:</label>
-                <input
-                  type="text"
-                  value={ultramsgToken}
-                  onChange={e => setUltramsgToken(e.target.value)}
-                  placeholder="Token de UltraMsg"
-                  style={{ width: '100%', padding: '8px 10px', background: 'rgba(15, 23, 42, 0.9)', border: '1px solid rgba(37, 211, 102, 0.3)', borderRadius: '8px', color: '#fff', fontSize: '0.82rem', fontFamily: 'monospace' }}
-                />
-              </div>
+
+            <div>
+              <label style={{ fontSize: '0.8rem', color: '#e2e8f0', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
+                Cargo o Responsable Receptor:
+              </label>
+              <input
+                type="text"
+                value={coordinator}
+                onChange={e => setCoordinator(e.target.value)}
+                placeholder="Coordinador de Convivencia / Rectoría"
+                style={{ width: '100%', padding: '10px 12px', background: 'rgba(30, 41, 59, 0.8)', border: '1px solid rgba(255, 255, 255, 0.15)', borderRadius: '10px', color: '#fff', fontSize: '0.9rem' }}
+              />
             </div>
-            {showUltraGuide && (
-              <div style={{ marginTop: '8px', background: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(37, 211, 102, 0.3)', padding: '10px 12px', borderRadius: '10px', fontSize: '0.76rem', color: '#cbd5e1', lineHeight: 1.5 }}>
-                <p style={{ margin: '0 0 6px', fontWeight: 800, color: '#4ade80' }}>
-                  ⚡ Envío a WhatsApp sin abrir chats ni requerir segundas confirmaciones:
-                </p>
-                <ol style={{ margin: '0 0 6px', paddingLeft: '18px', color: '#94a3b8', fontSize: '0.74rem' }}>
-                  <li>Ingresa a <a href="https://ultramsg.com" target="_blank" rel="noreferrer" style={{ color: '#25D366' }}>ultramsg.com</a> y crea una cuenta de prueba gratis (en 30 segundos, sin tarjeta).</li>
-                  <li>Escanea el <strong>Código QR</strong> en pantalla con tu WhatsApp (en <em>Dispositivos vinculados</em>).</li>
-                  <li>Copia el <strong>Instance ID</strong> y el <strong>Token</strong> y pégalos aquí arriba.</li>
-                  <li>¡Listo! A partir de ese momento, al dar clic a <em>"Notificar a WhatsApp"</em> el mensaje llegará directo al número del directivo en su WhatsApp personal automáticamente.</li>
-                </ol>
+
+            {/* Opción 1: UltraMsg (WhatsApp Gateway Directo - 100% Automático mediante Código QR) */}
+            <div style={{ background: 'rgba(30, 41, 59, 0.8)', border: '1px solid rgba(37, 211, 102, 0.4)', padding: '14px', borderRadius: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <label style={{ fontSize: '0.82rem', color: '#25D366', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>🟢 Pasarela Oficial UltraMsg (Envío 100% Automático a WhatsApp):</span>
+                  <span style={{ background: 'rgba(37, 211, 102, 0.2)', color: '#4ade80', fontSize: '0.68rem', padding: '1px 6px', borderRadius: '4px' }}>1 Clic</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowUltraGuide(g => !g)}
+                  style={{ background: 'none', border: 'none', color: '#25D366', fontSize: '0.72rem', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
+                >
+                  {showUltraGuide ? 'Ocultar guía' : '¿Cómo activarlo gratis?'}
+                </button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '6px' }}>
+                <div>
+                  <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: '2px' }}>Instance ID:</label>
+                  <input
+                    type="text"
+                    value={ultramsgId}
+                    onChange={e => setUltramsgId(e.target.value)}
+                    placeholder="instance12345"
+                    style={{ width: '100%', padding: '8px 10px', background: 'rgba(15, 23, 42, 0.9)', border: '1px solid rgba(37, 211, 102, 0.3)', borderRadius: '8px', color: '#fff', fontSize: '0.82rem', fontFamily: 'monospace' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: '2px' }}>Token:</label>
+                  <input
+                    type="text"
+                    value={ultramsgToken}
+                    onChange={e => setUltramsgToken(e.target.value)}
+                    placeholder="Token de UltraMsg"
+                    style={{ width: '100%', padding: '8px 10px', background: 'rgba(15, 23, 42, 0.9)', border: '1px solid rgba(37, 211, 102, 0.3)', borderRadius: '8px', color: '#fff', fontSize: '0.82rem', fontFamily: 'monospace' }}
+                  />
+                </div>
+              </div>
+              {showUltraGuide && (
+                <div style={{ marginTop: '8px', background: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(37, 211, 102, 0.3)', padding: '10px 12px', borderRadius: '10px', fontSize: '0.76rem', color: '#cbd5e1', lineHeight: 1.5 }}>
+                  <p style={{ margin: '0 0 6px', fontWeight: 800, color: '#4ade80' }}>
+                    ⚡ Envío a WhatsApp sin abrir chats ni requerir segundas confirmaciones:
+                  </p>
+                  <ol style={{ margin: '0 0 6px', paddingLeft: '18px', color: '#94a3b8', fontSize: '0.74rem' }}>
+                    <li>Ingresa a <a href="https://ultramsg.com" target="_blank" rel="noreferrer" style={{ color: '#25D366' }}>ultramsg.com</a> y crea una cuenta de prueba gratis (en 30 segundos, sin tarjeta).</li>
+                    <li>Escanea el <strong>Código QR</strong> en pantalla con tu WhatsApp (en <em>Dispositivos vinculados</em>).</li>
+                    <li>Copia el <strong>Instance ID</strong> y el <strong>Token</strong> y pégalos aquí arriba.</li>
+                    <li>¡Listo! A partir de ese momento, al dar clic a <em>"Notificar a WhatsApp"</em> el mensaje llegará directo al número del directivo en su WhatsApp personal automáticamente.</li>
+                  </ol>
+                </div>
+              )}
+            </div>
+
+            {/* Opción 2: Webhook Directo (Discord / Telegram / Institucional) */}
+            <div style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(139, 92, 246, 0.35)', padding: '12px', borderRadius: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <label style={{ fontSize: '0.8rem', color: '#a78bfa', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>🚀 Webhook Alternativo (Discord / Telegram / Zapier):</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowWebhookGuide(g => !g)}
+                  style={{ background: 'none', border: 'none', color: '#a78bfa', fontSize: '0.72rem', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
+                >
+                  {showWebhookGuide ? 'Ocultar' : 'Ver guía'}
+                </button>
+              </div>
+              <input
+                type="text"
+                value={webhookUrl}
+                onChange={e => setWebhookUrl(e.target.value)}
+                placeholder="https://discord.com/api/webhooks/... o webhook URL"
+                style={{ width: '100%', padding: '9px 12px', background: 'rgba(15, 23, 42, 0.9)', border: '1px solid rgba(139, 92, 246, 0.4)', borderRadius: '8px', color: '#fff', fontSize: '0.85rem', fontFamily: 'monospace' }}
+              />
+            </div>
+
+            {/* Opción 3: Clave API CallMeBot (Para WhatsApp directo cuando el bot responda) */}
+            <div style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(56, 189, 248, 0.25)', padding: '12px', borderRadius: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <label style={{ fontSize: '0.8rem', color: '#38bdf8', fontWeight: 700, margin: 0 }}>
+                  ⚡ Clave API CallMeBot WhatsApp (Opcional):
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowKeyGuide(g => !g)}
+                  style={{ background: 'none', border: 'none', color: '#38bdf8', fontSize: '0.72rem', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
+                >
+                  {showKeyGuide ? 'Ocultar info' : '¿Cómo obtenerla?'}
+                </button>
+              </div>
+              <input
+                type="text"
+                value={apiKey}
+                onChange={e => setApiKey(e.target.value)}
+                placeholder="Pega aquí tu API Key (ej. 839201)"
+                style={{ width: '100%', padding: '9px 12px', background: 'rgba(15, 23, 42, 0.9)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '8px', color: '#fff', fontSize: '0.9rem', fontFamily: 'monospace' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(30, 41, 59, 0.5)', padding: '10px 12px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+              <input
+                type="checkbox"
+                id="autoNotify"
+                checked={autoNotify}
+                onChange={e => setAutoNotify(e.target.checked)}
+                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+              />
+              <label htmlFor="autoNotify" style={{ fontSize: '0.82rem', color: '#f8fafc', cursor: 'pointer', margin: 0 }}>
+                <strong>Centinela Autónomo:</strong> Disparar y despachar alertas a WhatsApp automáticamente en cuanto la IA detecte riñas o riesgos.
+              </label>
+            </div>
+
+            {testResult && (
+              <div style={{
+                background: testResult.type === 'success' ? 'rgba(16, 185, 129, 0.2)' : (testResult.type === 'error' ? 'rgba(239, 68, 68, 0.25)' : 'rgba(56, 189, 248, 0.15)'),
+                border: testResult.type === 'success' ? '1px solid #10b981' : (testResult.type === 'error' ? '1px solid #ef4444' : '1px solid #38bdf8'),
+                padding: '10px 14px',
+                borderRadius: '10px',
+                color: testResult.type === 'success' ? '#34d399' : (testResult.type === 'error' ? '#fca5a5' : '#38bdf8'),
+                fontSize: '0.82rem',
+                lineHeight: 1.4
+              }}>
+                {testResult.text}
               </div>
             )}
           </div>
 
-          {/* Opción 2: Webhook Directo (Discord / Telegram / Institucional) */}
-          <div style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(139, 92, 246, 0.35)', padding: '12px', borderRadius: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-              <label style={{ fontSize: '0.8rem', color: '#a78bfa', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span>🚀 Webhook Alternativo (Discord / Telegram / Zapier):</span>
-              </label>
-              <button
-                type="button"
-                onClick={() => setShowWebhookGuide(g => !g)}
-                style={{ background: 'none', border: 'none', color: '#a78bfa', fontSize: '0.72rem', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
-              >
-                {showWebhookGuide ? 'Ocultar' : 'Ver guía'}
-              </button>
-            </div>
-            <input
-              type="text"
-              value={webhookUrl}
-              onChange={e => setWebhookUrl(e.target.value)}
-              placeholder="https://discord.com/api/webhooks/... o webhook URL"
-              style={{ width: '100%', padding: '9px 12px', background: 'rgba(15, 23, 42, 0.9)', border: '1px solid rgba(139, 92, 246, 0.4)', borderRadius: '8px', color: '#fff', fontSize: '0.85rem', fontFamily: 'monospace' }}
-            />
-          </div>
-
-          {/* Opción 3: Clave API CallMeBot (Para WhatsApp directo cuando el bot responda) */}
-          <div style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(56, 189, 248, 0.25)', padding: '12px', borderRadius: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-              <label style={{ fontSize: '0.8rem', color: '#38bdf8', fontWeight: 700, margin: 0 }}>
-                ⚡ Clave API CallMeBot WhatsApp (Opcional):
-              </label>
-              <button
-                type="button"
-                onClick={() => setShowKeyGuide(g => !g)}
-                style={{ background: 'none', border: 'none', color: '#38bdf8', fontSize: '0.72rem', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
-              >
-                {showKeyGuide ? 'Ocultar info' : '¿Cómo obtenerla?'}
-              </button>
-            </div>
-            <input
-              type="text"
-              value={apiKey}
-              onChange={e => setApiKey(e.target.value)}
-              placeholder="Pega aquí tu API Key (ej. 839201)"
-              style={{ width: '100%', padding: '9px 12px', background: 'rgba(15, 23, 42, 0.9)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '8px', color: '#fff', fontSize: '0.9rem', fontFamily: 'monospace' }}
-            />
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(30, 41, 59, 0.5)', padding: '10px 12px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
-            <input
-              type="checkbox"
-              id="autoNotify"
-              checked={autoNotify}
-              onChange={e => setAutoNotify(e.target.checked)}
-              style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-            />
-            <label htmlFor="autoNotify" style={{ fontSize: '0.82rem', color: '#f8fafc', cursor: 'pointer', margin: 0 }}>
-              <strong>Centinela Autónomo:</strong> Disparar y despachar alertas a WhatsApp automáticamente en cuanto la IA detecte riñas o riesgos.
-            </label>
-          </div>
-
-          {testResult && (
-            <div style={{
-              background: testResult.type === 'success' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(56, 189, 248, 0.15)',
-              border: testResult.type === 'success' ? '1px solid #10b981' : '1px solid #38bdf8',
-              padding: '10px 14px',
-              borderRadius: '10px',
-              color: testResult.type === 'success' ? '#34d399' : '#38bdf8',
-              fontSize: '0.82rem',
-              lineHeight: 1.4
-            }}>
-              {testResult.text}
-            </div>
-          )}
-
-          <div style={{ display: 'flex', gap: '10px', marginTop: '4px', flexWrap: 'wrap' }}>
+          {/* Footer fijo inferior SIEMPRE VISIBLE */}
+          <div style={{
+            padding: '14px 24px 18px',
+            borderTop: '1px solid rgba(255, 255, 255, 0.12)',
+            background: 'rgba(10, 16, 30, 0.98)',
+            display: 'flex',
+            gap: '10px',
+            flexWrap: 'wrap',
+            flexShrink: 0,
+            zIndex: 10
+          }}>
             <button
               type="button"
               className="button secondary"
               onClick={handleTestWhatsApp}
               disabled={busy || !phone.trim()}
-              style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px', borderColor: '#25D366', color: '#25D366' }}
+              style={{ flex: 1, minHeight: '44px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px', borderColor: '#25D366', color: '#25D366', fontWeight: 700 }}
             >
-              {apiKey.trim() || webhookUrl.trim() ? '⚡ Probar Envío Automático' : '🧪 Probar Enlace WhatsApp'}
+              {ultramsgId.trim() || apiKey.trim() || webhookUrl.trim() ? '⚡ Probar Envío Automático' : '🧪 Probar Enlace WhatsApp'}
             </button>
             <button
               type="submit"
               className="button primary"
               disabled={busy}
-              style={{ flex: 1, justifyContent: 'center', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)' }}
+              style={{ flex: 1, minHeight: '44px', justifyContent: 'center', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', fontWeight: 800 }}
             >
               {busy ? 'Guardando...' : '💾 Guardar Configuración'}
             </button>
@@ -4040,7 +4109,12 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
   const [activeAlert, setActiveAlert] = useState(null)
   const [auditBusy, setAuditBusy] = useState(false)
   const [auditToast, setAuditToast] = useState(null)
-  const [whatsappConfig, setWhatsappConfig] = useState({ phone_number: '+573105551234', auto_notify_alerts: true })
+  const [whatsappConfig, setWhatsappConfig] = useState({
+    phone_number: '+573145819221',
+    auto_notify_alerts: true,
+    ultramsg_instance_id: 'instance196028',
+    ultramsg_token: 'i7nkhyqgyo6p1nj6'
+  })
   const t = translations[lang] || translations.es
 
   const loadData = useCallback(async () => {

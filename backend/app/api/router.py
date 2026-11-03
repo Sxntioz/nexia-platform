@@ -1,8 +1,13 @@
+import json
+import logging
+import os
 import re
 import urllib.parse
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
+
+logger = logging.getLogger("nexia.api")
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import FileResponse, RedirectResponse
@@ -1304,11 +1309,36 @@ _whatsapp_config = {
     "ultramsg_token": "",
 }
 
+CONFIG_FILE_PATH = settings.upload_dir.parent / "whatsapp_config.json"
+
+def _load_persisted_whatsapp_config():
+    global _whatsapp_config
+    try:
+        if CONFIG_FILE_PATH.is_file():
+            with open(CONFIG_FILE_PATH, "r", encoding="utf-8") as f:
+                saved = json.load(f)
+                if isinstance(saved, dict):
+                    _whatsapp_config.update(saved)
+    except Exception as e:
+        logger.warning(f"Error cargando whatsapp_config.json: {e}")
+
+def _save_persisted_whatsapp_config():
+    try:
+        CONFIG_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(CONFIG_FILE_PATH, "w", encoding="utf-8") as f:
+            json.dump(_whatsapp_config, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        logger.warning(f"Error guardando whatsapp_config.json: {e}")
+
+_load_persisted_whatsapp_config()
+
 async def dispatch_automated_whatsapp(
     phone_number: str,
     message_text: str,
     apikey: str | None = None,
     webhook_url: str | None = None,
+    ultramsg_instance_id: str | None = None,
+    ultramsg_token: str | None = None,
 ) -> dict:
     """
     Despacha el mensaje de alerta automáticamente al WhatsApp del directivo
@@ -1320,18 +1350,23 @@ async def dispatch_automated_whatsapp(
         clean_digits = "57" + clean_digits
 
     # 1. Pasarela UltraMsg (WhatsApp Cloud Gateway Directo — 100% Automático)
-    inst_id = _whatsapp_config.get("ultramsg_instance_id", "").strip()
-    token_val = _whatsapp_config.get("ultramsg_token", "").strip()
+    inst_id = (ultramsg_instance_id or _whatsapp_config.get("ultramsg_instance_id", "")).strip()
+    token_val = (ultramsg_token or _whatsapp_config.get("ultramsg_token", "")).strip()
     target_webhook = webhook_url or _whatsapp_config.get("webhook_url", "").strip() or os.getenv("WHATSAPP_WEBHOOK_URL", "")
 
     if "api.ultramsg.com" in target_webhook or (inst_id and token_val):
         try:
             clean_inst = inst_id if inst_id.startswith("instance") else f"instance{inst_id}"
-            target_url = target_webhook if ("api.ultramsg.com" in target_webhook) else f"https://api.ultramsg.com/{clean_inst}/messages/chat"
+            sep = "&" if "?" in target_webhook else "?"
+            target_url = (
+                f"{target_webhook}{sep}token={token_val}"
+                if ("api.ultramsg.com" in target_webhook)
+                else f"https://api.ultramsg.com/{clean_inst}/messages/chat?token={token_val}"
+            )
             async with httpx.AsyncClient(timeout=12.0) as client:
                 data = {
                     "token": token_val or apikey or "",
-                    "to": f"{clean_digits}@c.us",
+                    "to": f"+{clean_digits}",
                     "body": message_text,
                 }
                 res = await client.post(target_url, data=data)
@@ -1344,7 +1379,14 @@ async def dispatch_automated_whatsapp(
                         "detail": f"¡Mensaje enviado de forma 100% automática al WhatsApp (+{clean_digits}) vía UltraMsg!",
                     }
                 elif res_data.get("error"):
-                    logger.warning(f"UltraMsg error: {res_data.get('error')}")
+                    err_msg = str(res_data.get("error"))
+                    logger.warning(f"UltraMsg error: {err_msg}")
+                    return {
+                        "success": False,
+                        "provider": "ULTRAMSG_WHATSAPP",
+                        "error": err_msg,
+                        "detail": f"UltraMsg reporta: {err_msg}. Asegúrate de haber escaneado el código QR en UltraMsg y copiado el Token exacto.",
+                    }
         except Exception as e:
             logger.warning(f"Error despachando vía UltraMsg: {e}")
 
@@ -1499,7 +1541,7 @@ def format_whatsapp_alert_message(
     description: str,
     confidence: str,
     suggested_action: str | None = None,
-    phone_number: str = "+573105551234"
+    phone_number: str = "+573145819221"
 ) -> tuple[str, str]:
     now = datetime.now()
     tipo_str = TYPE_ALERT_LABELS.get(incident_type, incident_type)
@@ -1527,6 +1569,7 @@ def format_whatsapp_alert_message(
 
 def run_continuous_audit_task(session_id: str, camera_id: str, camera_label: str, stored_name: str):
     try:
+        _load_persisted_whatsapp_config()
         from app.services.gemini import analyze_live_stream_snippet
         from app.db.session import get_session_factory
         from app.models import CCTVLiveAlert, Camera
@@ -1547,7 +1590,8 @@ def run_continuous_audit_task(session_id: str, camera_id: str, camera_label: str
             confidence = res.get("confidence", "Alta fidelidad")
             action = res.get("suggested_action", "Verificar de inmediato en el aula.")
 
-            phone = _whatsapp_config.get("phone_number", "+573105551234")
+            _load_persisted_whatsapp_config()
+            phone = _whatsapp_config.get("phone_number", "+573145819221")
             wa_msg, wa_link = format_whatsapp_alert_message(
                 camera_label=camera_label,
                 location=location,
@@ -1850,6 +1894,7 @@ async def webrtc_signaling_endpoint(websocket: WebSocket, camera_id: str):
 
 @api_router.get("/cctv/whatsapp-config", tags=["cctv-live"])
 def get_whatsapp_config():
+    _load_persisted_whatsapp_config()
     return _whatsapp_config
 
 
@@ -1869,6 +1914,7 @@ def update_whatsapp_config(payload: dict):
         _whatsapp_config["ultramsg_instance_id"] = payload["ultramsg_instance_id"].strip()
     if "ultramsg_token" in payload:
         _whatsapp_config["ultramsg_token"] = payload["ultramsg_token"].strip()
+    _save_persisted_whatsapp_config()
     return _whatsapp_config
 
 
@@ -1878,6 +1924,7 @@ async def dispatch_cctv_alert_to_whatsapp(payload: dict):
     Envía directamente el reporte o alerta en 1 solo clic al WhatsApp del coordinador
     vía UltraMsg, Whapi, CallMeBot o Webhooks, sin abrir pestañas ni requerir clics adicionales.
     """
+    _load_persisted_whatsapp_config()
     phone = payload.get("phone_number") or _whatsapp_config.get("phone_number", "+573145819221")
     camera_label = payload.get("camera_label", "CCTV Escolar")
     location = payload.get("location", camera_label)
@@ -1902,6 +1949,8 @@ async def dispatch_cctv_alert_to_whatsapp(payload: dict):
         message_text=msg,
         apikey=_whatsapp_config.get("callmebot_api_key"),
         webhook_url=_whatsapp_config.get("webhook_url"),
+        ultramsg_instance_id=_whatsapp_config.get("ultramsg_instance_id"),
+        ultramsg_token=_whatsapp_config.get("ultramsg_token"),
     )
     return {
         "status": "ok" if auto_res.get("success") else "fallback_link_ready",
@@ -1914,11 +1963,23 @@ async def dispatch_cctv_alert_to_whatsapp(payload: dict):
 
 @api_router.post("/cctv/whatsapp-test", tags=["cctv-live"])
 async def test_whatsapp_alert(payload: dict):
+    _load_persisted_whatsapp_config()
     phone = payload.get("phone_number") or _whatsapp_config.get("phone_number", "+573145819221")
     camera_label = payload.get("camera_label", "Cámara Salón 201")
     incident_type = payload.get("incident_type", "FIGHT")
     apikey = payload.get("callmebot_api_key") or _whatsapp_config.get("callmebot_api_key")
     webhook_url = payload.get("webhook_url") or _whatsapp_config.get("webhook_url")
+    ultramsg_inst = payload.get("ultramsg_instance_id") or _whatsapp_config.get("ultramsg_instance_id")
+    ultramsg_tok = payload.get("ultramsg_token") or _whatsapp_config.get("ultramsg_token")
+
+    if ultramsg_inst and str(ultramsg_inst).strip():
+        _whatsapp_config["ultramsg_instance_id"] = str(ultramsg_inst).strip()
+    if ultramsg_tok and str(ultramsg_tok).strip():
+        _whatsapp_config["ultramsg_token"] = str(ultramsg_tok).strip()
+    if phone and str(phone).strip():
+        _whatsapp_config["phone_number"] = str(phone).strip()
+    _save_persisted_whatsapp_config()
+
     msg, link = format_whatsapp_alert_message(
         camera_label=camera_label,
         location="Segundo Piso - Salón 201",
@@ -1933,7 +1994,9 @@ async def test_whatsapp_alert(payload: dict):
         phone_number=phone,
         message_text=msg,
         apikey=apikey,
-        webhook_url=webhook_url
+        webhook_url=webhook_url,
+        ultramsg_instance_id=ultramsg_inst,
+        ultramsg_token=ultramsg_tok,
     )
     return {
         "status": "ok",
@@ -1947,11 +2010,13 @@ async def test_whatsapp_alert(payload: dict):
 @api_router.get("/cctv/alerts", tags=["cctv-live"])
 def list_cctv_alerts(limit: int = 30, db: Session = Depends(get_db)):
     from app.models import CCTVLiveAlert
+    _load_persisted_whatsapp_config()
     alerts = db.scalars(
         select(CCTVLiveAlert).order_by(desc(CCTVLiveAlert.created_at)).limit(limit)
     ).all()
     results = []
-    phone = _whatsapp_config.get("phone_number", "+573105551234")
+    _load_persisted_whatsapp_config()
+    phone = _whatsapp_config.get("phone_number", "+573145819221")
     for a in alerts:
         _, link = format_whatsapp_alert_message(
             camera_label=a.camera_label,
@@ -1961,7 +2026,7 @@ def list_cctv_alerts(limit: int = 30, db: Session = Depends(get_db)):
             description=a.description,
             confidence=a.confidence,
             suggested_action=a.suggested_action,
-            phone_number=a.whatsapp_recipient or phone,
+            phone_number=phone,
         )
         results.append({
             "id": a.id,
@@ -1975,7 +2040,7 @@ def list_cctv_alerts(limit: int = 30, db: Session = Depends(get_db)):
             "confidence": a.confidence,
             "suggested_action": a.suggested_action,
             "whatsapp_notified": a.whatsapp_notified,
-            "whatsapp_recipient": a.whatsapp_recipient or phone,
+            "whatsapp_recipient": phone,
             "whatsapp_link": link,
             "created_at": a.created_at.isoformat(),
         })
@@ -2019,7 +2084,8 @@ def manual_audit_live_camera(payload: dict, db: Session = Depends(get_db)):
         }
 
     res = analyze_live_stream_snippet(video_path, cam.label, cam.location or cam.label)
-    phone = _whatsapp_config.get("phone_number", "+573105551234")
+    _load_persisted_whatsapp_config()
+    phone = _whatsapp_config.get("phone_number", "+573145819221")
 
     if res.get("incident_detected"):
         incident_type = res.get("incident_type", "FIGHT")
@@ -2098,7 +2164,8 @@ async def analyze_broadcast_frame(
     image_bytes = await frame.read()
     result = analyze_live_frame_snapshot(image_bytes, camera_label, location)
 
-    phone = _whatsapp_config.get("phone_number", "+573105551234")
+    _load_persisted_whatsapp_config()
+    phone = _whatsapp_config.get("phone_number", "+573145819221")
     incident_detected = bool(result.get("incident_detected", False))
     incident_type = result.get("incident_type", "NORMAL")
     title = result.get("title", "Convivencia Pacífica")
@@ -2142,7 +2209,9 @@ async def analyze_broadcast_frame(
                 phone_number=phone,
                 message_text=msg,
                 apikey=_whatsapp_config.get("callmebot_api_key"),
-                webhook_url=_whatsapp_config.get("webhook_url")
+                webhook_url=_whatsapp_config.get("webhook_url"),
+                ultramsg_instance_id=_whatsapp_config.get("ultramsg_instance_id"),
+                ultramsg_token=_whatsapp_config.get("ultramsg_token"),
             ))
 
         # Broadcast immediately to global CCTV websocket
