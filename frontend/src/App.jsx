@@ -2726,13 +2726,34 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
               style={{ width: '100%', padding: '9px 12px', background: 'rgba(15, 23, 42, 0.9)', border: '1px solid rgba(56, 189, 248, 0.3)', borderRadius: '8px', color: '#fff', fontSize: '0.9rem', fontFamily: 'monospace' }}
             />
             {showKeyGuide && (
-              <div style={{ marginTop: '8px', background: 'rgba(15, 23, 42, 0.85)', padding: '10px', borderRadius: '8px', fontSize: '0.76rem', color: '#94a3b8', lineHeight: 1.45 }}>
-                <p style={{ margin: '0 0 4px', fontWeight: 700, color: '#38bdf8' }}>Obtener tu clave gratuita en 15 segundos:</p>
-                <ol style={{ margin: 0, paddingLeft: '18px' }}>
-                  <li>Abre WhatsApp y envía el mensaje: <code>I allow callmebot to send me messages</code> al número <strong>+34 644 44 49 46</strong>.</li>
-                  <li>El bot responderá de inmediato con tu API Key numérica (ej. 839201).</li>
-                  <li>Pégala en esta casilla. ¡Listo! La IA enviará los reportes sola a tu celular.</li>
-                </ol>
+              <div style={{ marginTop: '8px', background: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '12px', borderRadius: '10px', fontSize: '0.78rem', color: '#cbd5e1', lineHeight: 1.5 }}>
+                <p style={{ margin: '0 0 6px', fontWeight: 800, color: '#38bdf8' }}>
+                  🔑 Activa tu API Key en 1 clic desde tu WhatsApp:
+                </p>
+                <p style={{ margin: '0 0 8px', fontSize: '0.75rem', color: '#94a3b8' }}>
+                  Importante: El bot solo responde al comando exacto en inglés: <code>I allow callmebot to send me messages</code> (no respondas con 'Hola').
+                </p>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                  <a
+                    href="https://wa.me/34684723962?text=I%20allow%20callmebot%20to%20send%20me%20messages"
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ background: '#25D366', color: '#fff', textDecoration: 'none', padding: '6px 12px', borderRadius: '6px', fontWeight: 700, fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    📲 Abrir Bot 1 (+34 684 72 39 62)
+                  </a>
+                  <a
+                    href="https://wa.me/34644919680?text=I%20allow%20callmebot%20to%20send%20me%20messages"
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ background: '#128C7E', color: '#fff', textDecoration: 'none', padding: '6px 12px', borderRadius: '6px', fontWeight: 700, fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    📲 Abrir Bot 2 (+34 644 91 96 80)
+                  </a>
+                </div>
+                <small style={{ color: '#94a3b8', display: 'block' }}>
+                  Al tocar el botón se abrirá WhatsApp con el mensaje ya escrito. Solo pulsa <strong>Enviar</strong> y el bot te responderá con tu clave (ej: <code>Your APIKEY is 839201</code>). Cópiala y pégala aquí.
+                </small>
               </div>
             )}
           </div>

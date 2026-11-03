@@ -1345,7 +1345,7 @@ async def dispatch_automated_whatsapp(
     bot_key = apikey or _whatsapp_config.get("callmebot_api_key") or os.getenv("CALLMEBOT_API_KEY")
     if bot_key:
         try:
-            target_phone = f"+{clean_digits}" if not clean_digits.startswith("+") else clean_digits
+            target_phone = clean_digits.lstrip("+")
             url = (
                 f"https://api.callmebot.com/whatsapp.php"
                 f"?phone={urllib.parse.quote(target_phone)}"
