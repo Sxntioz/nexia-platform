@@ -2982,32 +2982,20 @@ function LiveIncidentAlertModal({ alert, onClose, onFileReport }) {
           type: 'success',
           text: `🚀 ${res.auto_dispatch.detail || '¡Reporte enviado de forma 100% automática al WhatsApp oficial!'}`
         })
-        setDispatching(false)
-        return
+      } else {
+        setDispatchResult({
+          type: 'error',
+          text: `⚠️ ${res?.auto_dispatch?.detail || 'No se pudo despachar automáticamente vía pasarela en segundo plano.'}`
+        })
       }
-    } catch (_err) {
-      // Continuar a fallback de enlace nativo
+    } catch (err) {
+      setDispatchResult({
+        type: 'error',
+        text: `⚠️ Error de comunicación: ${err.message}`
+      })
+    } finally {
+      setDispatching(false)
     }
-
-    // Fallback: Si no hay pasarela en segundo plano activa, abre el enlace nativo directo
-    let link = alert.whatsapp_link
-    if (!link) {
-      const localCfg = (() => {
-        try {
-          const s = localStorage.getItem('nexia_whatsapp_config')
-          return s ? JSON.parse(s) : null
-        } catch (_e) { return null }
-      })()
-      const ph = (localCfg?.phone_number || '+573145813221').replace(/[^\d]/g, '')
-      const msg = `🚨 *ALERTA EN VIVO — SISTEMA NEXIA IA* 🚨\n📍 *Cámara:* ${alert.camera_label}\n⚠️ *Hecho:* ${alert.incident_type}\n🔍 *Fidelidad:* ${alert.confidence}\n📝 *Detalle:* ${alert.description}\n⚖️ *Ley 1620:* ${alert.suggested_action || 'Supervisión en el aula'}`
-      link = `https://wa.me/${ph}?text=${encodeURIComponent(msg)}`
-    }
-    window.open(link, '_blank')
-    setDispatchResult({
-      type: 'info',
-      text: '📲 Se abrió WhatsApp con el reporte. Para envío directo en segundo plano sin abrir chats, configura UltraMsg en Ajustes.'
-    })
-    setDispatching(false)
   }
 
   return (
@@ -3253,6 +3241,8 @@ function CCTVBroadcaster({ user }) {
   const [isAuditingFrame, setIsAuditingFrame] = useState(false)
   const [liveDiagnosis, setLiveDiagnosis] = useState(null)
   const [auditToast, setAuditToast] = useState(null)
+  const [dispatchingWa, setDispatchingWa] = useState(false)
+  const [waDispatchToast, setWaDispatchToast] = useState(null)
 
   const videoPreviewRef = useRef(null)
   const mediaRecorderRef = useRef(null)
@@ -3403,6 +3393,46 @@ function CCTVBroadcaster({ user }) {
       setIsAuditingFrame(false)
     }
   }, [selectedCamId])
+
+  const handleDispatchLiveDiagnosis = async () => {
+    if (!liveDiagnosis || dispatchingWa) return
+    setDispatchingWa(true)
+    setWaDispatchToast(null)
+    const activeCam = (cameras && cameras.find(c => c.id === selectedCamId))
+    const camLabel = liveDiagnosis.camera_label || activeCam?.label || 'Cámara Transmisión'
+    try {
+      const res = await apiRequest('/cctv/whatsapp-dispatch', {
+        method: 'POST',
+        body: JSON.stringify({
+          camera_label: camLabel,
+          incident_type: liveDiagnosis.incident_detected ? liveDiagnosis.incident_type : 'OBSERVACION_EN_VIVO',
+          confidence: liveDiagnosis.confidence || 'Alta fidelidad',
+          description: liveDiagnosis.persons_description || liveDiagnosis.description || 'Monitoreo de convivencia escolar en vivo.',
+          suggested_action: liveDiagnosis.suggested_action || 'Supervisión en el aula.',
+          title: liveDiagnosis.title || (liveDiagnosis.incident_detected ? 'Incidente Detectado en Vivo' : 'Diagnóstico de Convivencia en Tiempo Real'),
+        })
+      })
+      if (res?.auto_dispatch?.success) {
+        setWaDispatchToast({
+          type: 'success',
+          text: `🚀 ${res.auto_dispatch.detail || '¡Diagnóstico enviado de forma 100% automática al WhatsApp oficial!'}`
+        })
+      } else {
+        setWaDispatchToast({
+          type: 'info',
+          text: `📲 ${res?.auto_dispatch?.detail || 'Solicitud de notificación procesada en el servidor.'}`
+        })
+      }
+    } catch (err) {
+      setWaDispatchToast({
+        type: 'error',
+        text: `⚠️ Error despachando a WhatsApp: ${err.message}`
+      })
+    } finally {
+      setDispatchingWa(false)
+      setTimeout(() => setWaDispatchToast(null), 8000)
+    }
+  }
 
   // Ciclo de auto-auditoría continua cada 12 segundos mientras se emite en vivo
   useEffect(() => {
@@ -4039,15 +4069,39 @@ function CCTVBroadcaster({ user }) {
                 </div>
               )}
 
-              {liveDiagnosis.whatsapp_link && (
-                <button
-                  type="button"
-                  className="button primary small"
-                  onClick={() => window.open(liveDiagnosis.whatsapp_link, '_blank')}
-                  style={{ width: '100%', justifyContent: 'center', background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)', fontWeight: 700, padding: '10px' }}
-                >
-                  📲 Notificar este Diagnóstico a WhatsApp Oficial
-                </button>
+              <button
+                type="button"
+                className="button primary small"
+                disabled={dispatchingWa}
+                onClick={handleDispatchLiveDiagnosis}
+                style={{
+                  width: '100%',
+                  justifyContent: 'center',
+                  background: waDispatchToast?.type === 'success' ? '#10b981' : 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)',
+                  fontWeight: 700,
+                  padding: '11px',
+                  border: 'none',
+                  boxShadow: '0 4px 15px rgba(37, 211, 102, 0.35)',
+                  fontSize: '0.88rem'
+                }}
+              >
+                {dispatchingWa ? '⏳ Despachando a WhatsApp oficial...' : (waDispatchToast?.type === 'success' ? '✅ ¡Diagnóstico Notificado a WhatsApp!' : '📲 Notificar este Diagnóstico a WhatsApp Oficial')}
+              </button>
+
+              {waDispatchToast && (
+                <div style={{
+                  marginTop: '10px',
+                  padding: '10px 14px',
+                  borderRadius: '10px',
+                  fontSize: '0.82rem',
+                  background: waDispatchToast.type === 'success' ? 'rgba(16, 185, 129, 0.25)' : (waDispatchToast.type === 'error' ? 'rgba(239, 68, 68, 0.25)' : 'rgba(56, 189, 248, 0.2)'),
+                  border: waDispatchToast.type === 'success' ? '1px solid #10b981' : (waDispatchToast.type === 'error' ? '1px solid #ef4444' : '1px solid #38bdf8'),
+                  color: waDispatchToast.type === 'success' ? '#34d399' : (waDispatchToast.type === 'error' ? '#fca5a5' : '#38bdf8'),
+                  lineHeight: 1.4,
+                  textAlign: 'center'
+                }}>
+                  {waDispatchToast.text}
+                </div>
               )}
             </div>
           ) : (
@@ -4072,13 +4126,15 @@ function CCTVBroadcaster({ user }) {
               flexWrap: 'wrap'
             }}>
               <span>{auditToast.text}</span>
-              {auditToast.whatsapp_link && (
+              {auditToast.type === 'alert' && (
                 <button
+                  type="button"
                   className="button primary small"
-                  onClick={() => window.open(auditToast.whatsapp_link, '_blank')}
-                  style={{ padding: '4px 10px', fontSize: '0.75rem', background: '#25D366', border: 'none' }}
+                  disabled={dispatchingWa}
+                  onClick={handleDispatchLiveDiagnosis}
+                  style={{ padding: '6px 12px', fontSize: '0.78rem', background: '#25D366', border: 'none', fontWeight: 700 }}
                 >
-                  📲 Abrir WhatsApp
+                  ⚡ Despachar a WhatsApp
                 </button>
               )}
             </div>
