@@ -2558,9 +2558,17 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
     } catch (_e) {}
     return config?.callmebot_api_key || ''
   })
+  const [webhookUrl, setWebhookUrl] = useState(() => {
+    try {
+      const local = localStorage.getItem('nexia_whatsapp_config')
+      if (local) return JSON.parse(local).webhook_url || ''
+    } catch (_e) {}
+    return config?.webhook_url || ''
+  })
   const [testResult, setTestResult] = useState(null)
   const [busy, setBusy] = useState(false)
   const [showKeyGuide, setShowKeyGuide] = useState(false)
+  const [showWebhookGuide, setShowWebhookGuide] = useState(false)
 
   useEffect(() => {
     if (config) {
@@ -2568,6 +2576,7 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
       setAutoNotify(config.auto_notify_alerts ?? true)
       setCoordinator(config.coordinator_name || 'Coordinador de Convivencia')
       if (config.callmebot_api_key) setApiKey(config.callmebot_api_key)
+      if (config.webhook_url) setWebhookUrl(config.webhook_url)
     }
   }, [config, isOpen])
 
@@ -2585,7 +2594,8 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
       phone_number: clean,
       auto_notify_alerts: autoNotify,
       coordinator_name: coordinator.trim(),
-      callmebot_api_key: apiKey.trim()
+      callmebot_api_key: apiKey.trim(),
+      webhook_url: webhookUrl.trim()
     }
     try {
       localStorage.setItem('nexia_whatsapp_config', JSON.stringify(newCfg))
@@ -2622,21 +2632,22 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
         body: JSON.stringify({
           phone_number: cleanNum.startsWith('57') ? '+' + cleanNum : phone,
           camera_label: 'Cámara Salón 201',
-          callmebot_api_key: apiKey.trim()
+          callmebot_api_key: apiKey.trim(),
+          webhook_url: webhookUrl.trim()
         })
       })
 
       if (res?.auto_dispatch?.success) {
         setTestResult({
           type: 'success',
-          text: `🚀 ¡Mensaje enviado automáticamente a WhatsApp (+${cleanNum}) sin necesidad de abrir el chat!`
+          text: `🚀 ${res.auto_dispatch.detail || '¡Mensaje despachado automáticamente sin necesidad de abrir el chat!'}`
         })
       } else {
         // Fallback a enlace nativo si aún no tiene API Key configurada
         window.open(clientWaLink, '_blank')
         setTestResult({
           type: 'info',
-          text: `📲 Se abrió WhatsApp con el reporte. ${res?.auto_dispatch?.detail || 'Para que se envíe 100% solo sin abrir chats, ingresa tu API Key gratuita de CallMeBot abajo.'}`
+          text: `📲 Se abrió WhatsApp con el reporte. ${res?.auto_dispatch?.detail || 'Para envío automático sin abrir chats, usa un Webhook (Discord/Telegram) o tu clave API.'}`
         })
       }
     } catch (_e) {
@@ -2704,18 +2715,55 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
             />
           </div>
 
-          {/* Clave API para Envío 100% Automático sin abrir chats */}
+          {/* Opción 1: Webhook Directo (Discord / Telegram / Institucional) - ¡Recomendado para entrega inmediata! */}
+          <div style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(139, 92, 246, 0.35)', padding: '12px', borderRadius: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <label style={{ fontSize: '0.8rem', color: '#a78bfa', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>🚀 Webhook Instantáneo (Discord / Telegram / Zapier):</span>
+                <span style={{ background: 'rgba(167, 139, 250, 0.2)', color: '#c4b5fd', fontSize: '0.68rem', padding: '1px 6px', borderRadius: '4px' }}>Recomendado</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowWebhookGuide(g => !g)}
+                style={{ background: 'none', border: 'none', color: '#a78bfa', fontSize: '0.72rem', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
+              >
+                {showWebhookGuide ? 'Ocultar guía Discord' : '¿Cómo usar con Discord?'}
+              </button>
+            </div>
+            <input
+              type="text"
+              value={webhookUrl}
+              onChange={e => setWebhookUrl(e.target.value)}
+              placeholder="https://discord.com/api/webhooks/... o webhook URL"
+              style={{ width: '100%', padding: '9px 12px', background: 'rgba(15, 23, 42, 0.9)', border: '1px solid rgba(139, 92, 246, 0.4)', borderRadius: '8px', color: '#fff', fontSize: '0.85rem', fontFamily: 'monospace' }}
+            />
+            {showWebhookGuide && (
+              <div style={{ marginTop: '8px', background: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(139, 92, 246, 0.4)', padding: '10px 12px', borderRadius: '10px', fontSize: '0.76rem', color: '#cbd5e1', lineHeight: 1.5 }}>
+                <p style={{ margin: '0 0 4px', fontWeight: 800, color: '#c4b5fd' }}>
+                  📱 Alerta directa a tu celular vía Discord (Toma 20 segundos y nunca se cae):
+                </p>
+                <ol style={{ margin: '0 0 6px', paddingLeft: '18px', color: '#94a3b8', fontSize: '0.74rem' }}>
+                  <li>Abre Discord en tu PC o celular y entra a tu servidor (o crea uno privado "NEXIA").</li>
+                  <li>Ve a <strong>Ajustes del Canal (⚙️) ➡️ Integraciones ➡️ Webhooks ➡️ Crear Webhook</strong>.</li>
+                  <li>Haz clic en <strong>"Copiar URL de Webhook"</strong> y pégala en esta casilla.</li>
+                  <li>¡Listo! Tu celular sonará y vibrará con el reporte completo y oficial de Ley 1620 al instante.</li>
+                </ol>
+              </div>
+            )}
+          </div>
+
+          {/* Opción 2: Clave API CallMeBot (Para WhatsApp directo cuando el bot responda) */}
           <div style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(56, 189, 248, 0.25)', padding: '12px', borderRadius: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
               <label style={{ fontSize: '0.8rem', color: '#38bdf8', fontWeight: 700, margin: 0 }}>
-                ⚡ Clave API CallMeBot (Para Envío 100% Automático):
+                ⚡ Clave API CallMeBot WhatsApp (Opcional):
               </label>
               <button
                 type="button"
                 onClick={() => setShowKeyGuide(g => !g)}
                 style={{ background: 'none', border: 'none', color: '#38bdf8', fontSize: '0.72rem', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
               >
-                {showKeyGuide ? 'Ocultar guía' : '¿Cómo obtenerla gratis?'}
+                {showKeyGuide ? 'Ocultar info' : '¿Cómo obtenerla?'}
               </button>
             </div>
             <input
@@ -2728,10 +2776,10 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
             {showKeyGuide && (
               <div style={{ marginTop: '8px', background: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '12px', borderRadius: '10px', fontSize: '0.78rem', color: '#cbd5e1', lineHeight: 1.5 }}>
                 <p style={{ margin: '0 0 6px', fontWeight: 800, color: '#38bdf8' }}>
-                  🔑 Activa tu API Key en 1 clic desde tu WhatsApp:
+                  🔑 Estado de la API CallMeBot:
                 </p>
                 <p style={{ margin: '0 0 8px', fontSize: '0.75rem', color: '#94a3b8' }}>
-                  Importante: El bot solo responde al comando exacto en inglés: <code>I allow callmebot to send me messages</code> (no respondas con 'Hola').
+                  Los servidores gratuitos de CallMeBot en España sufren saturaciones recurrentes por alta demanda mundial. Si tu mensaje <code>I allow callmebot to send me messages</code> quedó en visto, el bot puede tardar en procesar la cola. En cuanto te responda con la clave, pégala aquí.
                 </p>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
                   <a
@@ -2740,12 +2788,9 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
                     rel="noreferrer"
                     style={{ background: '#25D366', color: '#fff', textDecoration: 'none', padding: '7px 14px', borderRadius: '8px', fontWeight: 800, fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '6px', boxShadow: '0 2px 8px rgba(37, 211, 102, 0.4)' }}
                   >
-                    🟢 Abrir Nuevo Bot Activo (+34 623 78 64 49)
+                    🟢 Abrir Bot (+34 623 78 64 49)
                   </a>
                 </div>
-                <small style={{ color: '#94a3b8', display: 'block' }}>
-                  Al tocar el botón se abrirá WhatsApp con el mensaje ya escrito. Solo pulsa <strong>Enviar</strong> y el bot te responderá con tu clave (ej: <code>Your APIKEY is 839201</code>). Cópiala y pégala aquí.
-                </small>
               </div>
             )}
           </div>
@@ -2785,7 +2830,7 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
               disabled={busy || !phone.trim()}
               style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px', borderColor: '#25D366', color: '#25D366' }}
             >
-              {apiKey.trim() ? '⚡ Probar Envío Automático' : '🧪 Probar Enlace WhatsApp'}
+              {apiKey.trim() || webhookUrl.trim() ? '⚡ Probar Envío Automático' : '🧪 Probar Enlace WhatsApp'}
             </button>
             <button
               type="submit"

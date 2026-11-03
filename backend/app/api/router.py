@@ -1317,26 +1317,52 @@ async def dispatch_automated_whatsapp(
     if len(clean_digits) == 10 and clean_digits.startswith("3"):
         clean_digits = "57" + clean_digits
 
-    # 1. Si hay Webhook institucional configurado
+    # 1. Si hay Webhook institucional configurado (Discord, Telegram, Zapier, Make o Custom)
     target_webhook = webhook_url or _whatsapp_config.get("webhook_url") or os.getenv("WHATSAPP_WEBHOOK_URL")
     if target_webhook and target_webhook.startswith("http"):
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                res = await client.post(
-                    target_webhook,
-                    json={
-                        "phone": clean_digits,
-                        "recipient": f"+{clean_digits}",
-                        "message": message_text,
-                        "alert_type": "NEXIA_VISION_AI",
-                    },
-                )
-                if res.status_code in (200, 201, 202):
+                if "discord.com/api/webhooks" in target_webhook:
+                    discord_payload = {
+                        "content": f"🚨 **ALERTA CENTINELA IA — NEXIA (LEY 1620)** 🚨\n\n{message_text}",
+                        "embeds": [
+                            {
+                                "title": "🚨 Incidente Detectado en Vivo por Gemini IA",
+                                "description": message_text,
+                                "color": 15158332,
+                                "footer": {"text": "NEXIA • Centinela Autónomo Escolar"},
+                            }
+                        ],
+                    }
+                    res = await client.post(target_webhook, json=discord_payload)
+                elif "api.telegram.org" in target_webhook:
+                    tg_payload = {
+                        "text": message_text,
+                        "parse_mode": "Markdown",
+                    }
+                    res = await client.post(target_webhook, json=tg_payload)
+                else:
+                    res = await client.post(
+                        target_webhook,
+                        json={
+                            "content": message_text,
+                            "phone": clean_digits,
+                            "recipient": f"+{clean_digits}",
+                            "message": message_text,
+                            "alert_type": "NEXIA_VISION_AI",
+                        },
+                    )
+                if res.status_code in (200, 201, 202, 204):
+                    provider_name = (
+                        "DISCORD_WEBHOOK"
+                        if "discord.com" in target_webhook
+                        else ("TELEGRAM_BOT" if "telegram.org" in target_webhook else "WEBHOOK_INSTITUCIONAL")
+                    )
                     return {
                         "success": True,
-                        "provider": "WEBHOOK",
+                        "provider": provider_name,
                         "status_code": res.status_code,
-                        "detail": f"Mensaje despachado automáticamente vía Webhook Institucional a +{clean_digits}.",
+                        "detail": f"¡Alerta despachada automáticamente vía {provider_name} al instante con sonido y vibración!",
                     }
         except Exception as e:
             logger.warning(f"Error despachando vía Webhook: {e}")
