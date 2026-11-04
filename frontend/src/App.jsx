@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { API_BASE_URL, apiRequest, clearSession, getStoredUser, getToken, getWebSocketUrl, setSession, uploadVideoWithProgress } from './api/client.js'
-import ArchitecturalSchoolMap from './components/ArchitecturalSchoolMap.jsx'
 import { translations } from './i18n.js'
 
 // Únicamente 3 tipos de reporte permitidos para nuevos reportes
@@ -22,65 +21,27 @@ const TYPE_LABELS = {
 }
 
 const SCHOOL_LOCATIONS = {
-  'Primer piso (Patios, Zonas Comunes e Informática)': [
-    'Aula Polivalente',
-    'Laboratorio de Física',
-    'Laboratorio de Química',
-    'Sala de Artes',
-    'Sala de Danzas',
-    'Ágora',
-    'Rectoría y Enfermería',
-    'Aula de Tecnología 1',
-    'Aula de Tecnología 2',
-    'Aula de Tecnología 3',
-    'Laboratorio de Ciencias 1',
-    'Laboratorio de Ciencias 2',
-    'Sala de Sistemas 1 (Informática 1)',
-    'Sala de Sistemas 2 (Informática 2)',
-    'Sala de Sistemas 3 (Informática 3)',
-    'Auditorio Principal',
-    'Patio Canchas (Punto de Encuentro)',
-    'Zona Verde / Kiosco',
-    'Edificio Preescolar',
+  'Primer Piso (Patios, Zonas Comunes e Informática)': [
+    'Patio Canchas - Bicicletero',
+    'Patio Canchas - Zona Preescolar',
+    'Patio Banderas - Cooperativa',
+    'Patio Banderas - Rampa',
+    'Informática 1',
+    'Informática 2',
+    'Informática 3',
   ],
-  'Segundo piso': [
-    'Salón 201',
-    'Salón 202',
-    'Salón 203',
-    'Salón 204',
-    'Salón 205',
-    'Salón 206',
-    'Salón 207',
-    'Salón 208',
-    'Salón 209',
-    'Sala de Profesores',
-    'Aula de Inglés',
-    'Biblioteca Escolar',
-    'Comedor Escolar',
+  'Segundo Piso (Salones 201 – 216)': [
+    'Salón 201', 'Salón 202', 'Salón 203', 'Salón 204',
+    'Salón 205', 'Salón 206', 'Salón 207', 'Salón 208',
+    'Salón 209', 'Salón 210', 'Salón 211', 'Salón 212',
+    'Salón 213', 'Salón 214', 'Salón 215', 'Salón 216',
   ],
-  'Tercer piso (Salones, Música y Gradas)': [
-    'Salón 301',
-    'Salón 302',
-    'Salón 303',
-    'Salón 304',
-    'Salón 305',
-    'Salón 306',
-    'Música 1 (307)',
-    'Música 2 (308)',
-    'Salón 309',
-    'Salón 310',
-    'Salón 311',
-    'Salón 312',
-    'Salón 313',
-    'Salón 314',
-    'Salón 315',
-    'Salón 316',
-    'Baños Hombres (P3)',
-    'Baños Mujeres (P3)',
-    'Rampa / Pasillo Conector (P3)',
-    'Gradas Comedor',
+  'Tercer Piso (Salones 301 – 316)': [
+    'Salón 301', 'Salón 302', 'Salón 303', 'Salón 304',
+    'Salón 305', 'Salón 306', 'Salón 307', 'Salón 308',
+    'Salón 309', 'Salón 310', 'Salón 311', 'Salón 312',
+    'Salón 313', 'Salón 314', 'Salón 315', 'Salón 316',
   ],
-
 }
 
 const STATUS = {
@@ -927,9 +888,6 @@ function NexiaChatbot({ user, lang = 'es' }) {
 function Home({ user, lang = 'es' }) {
   const [stats, setStats] = useState(null)
   const [quickCode, setQuickCode] = useState('')
-  const [showMap, setShowMap] = useState(false)
-  const [mapFloor, setMapFloor] = useState('1')
-  const [selectedMapRoom, setSelectedMapRoom] = useState('')
   const t = translations[lang] || translations.es
 
   useEffect(() => {
@@ -1024,20 +982,18 @@ function Home({ user, lang = 'es' }) {
             </form>
           </div>
 
-          {/* Card 3: Explorador de Pisos */}
+          {/* Card: Consultar Radicado */}
           <div className="action-hub-card">
             <div className="action-hub-icon" style={{ background: 'rgba(139, 92, 246, 0.15)', color: 'var(--ai)' }}>
-              <Icon name="map" size={24} />
+              <Icon name="search" size={24} />
             </div>
-            <h3>{t.actionMapTitle}</h3>
-            <p>{t.actionMapDesc}</p>
+            <h3>{lang === 'es' ? 'Consultar Radicado (Ley 1620)' : 'Track Report Status'}</h3>
+            <p>{lang === 'es' ? 'Ingresa tu código anónimo de seguimiento para verificar el estado de tu caso y la auditoría institucional.' : 'Enter your anonymous tracking code to check case status and institutional audit in real time.'}</p>
             <button
-              className={`button ${showMap ? 'secondary' : 'primary'} full-width`}
-              onClick={() => setShowMap(!showMap)}
+              className="button primary full-width"
+              onClick={() => navigate('track')}
             >
-              {showMap
-                ? (lang === 'es' ? 'Ocultar Explorador de Pisos' : 'Hide Floor Explorer')
-                : (lang === 'es' ? 'Explorar Pisos 1, 2 y 3' : 'Explore Floors 1, 2 & 3')}
+              🔍 {lang === 'es' ? 'Consultar mi Caso' : 'Track My Case'}
             </button>
           </div>
 
@@ -1079,68 +1035,6 @@ function Home({ user, lang = 'es' }) {
             </div>
           </div>
         </section>
-
-        {/* Embedded Floor Explorer Section (Toggled) */}
-        {showMap && (
-          <section className="embedded-map-console">
-            <div className="console-panel-header">
-              <div>
-                <h3>{lang === 'es' ? 'Explorador Arquitectónico en Consola' : 'Architectural Floor Console'}</h3>
-                <small style={{ color: 'var(--text-muted)' }}>
-                  {lang === 'es'
-                    ? 'Consulta salones y zonas cubiertas por cámaras de seguridad en Pisos 1, 2 y 3.'
-                    : 'Check classrooms and camera coverage across Floors 1, 2, and 3.'}
-                </small>
-              </div>
-              <div className="floor-pills">
-                {['1', '2', '3'].map(fl => (
-                  <button
-                    key={fl}
-                    type="button"
-                    className={`floor-pill-btn ${mapFloor === fl ? 'active' : ''}`}
-                    onClick={() => setMapFloor(fl)}
-                  >
-                    {fl === '1' ? (lang === 'es' ? 'Piso 1 (Baja)' : 'Floor 1') : fl === '2' ? (lang === 'es' ? 'Piso 2 (201-216)' : 'Floor 2') : (lang === 'es' ? 'Piso 3 (301-316)' : 'Floor 3')}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ minHeight: '380px', marginTop: '16px' }}>
-              <ArchitecturalSchoolMap
-                selectedFloor={mapFloor}
-                selectedLocation={typeof selectedMapRoom === 'object' ? selectedMapRoom.location : selectedMapRoom}
-                onSelectLocation={(loc) => setSelectedMapRoom(loc)}
-                interactive={true}
-              />
-            </div>
-            {selectedMapRoom && (
-              <div style={{ marginTop: '12px', padding: '12px 14px', background: 'var(--bg-surface-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--accent-cyan)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-                <div>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.82rem', display: 'block' }}>
-                    {lang === 'es' ? 'Espacio seleccionado en el plano:' : 'Selected space on blueprint:'}
-                  </span>
-                  <strong style={{ color: 'var(--accent-cyan)', fontSize: '1rem' }}>
-                    {typeof selectedMapRoom === 'object' ? selectedMapRoom.location : selectedMapRoom}
-                  </strong>
-                  {typeof selectedMapRoom === 'object' && selectedMapRoom.floor && (
-                    <small style={{ marginLeft: '8px', color: 'var(--text-muted)' }}>({selectedMapRoom.floor})</small>
-                  )}
-                </div>
-                <button
-                  className="button primary small"
-                  onClick={() => {
-                    const roomName = typeof selectedMapRoom === 'object' ? selectedMapRoom.location : selectedMapRoom
-                    const floorName = typeof selectedMapRoom === 'object' ? selectedMapRoom.floor : ''
-                    navigate('report', { location: roomName, floor: floorName })
-                  }}
-                >
-                  {lang === 'es' ? 'Radicar reporte en este salón →' : 'Report in this room →'}
-                </button>
-              </div>
-            )}
-          </section>
-        )}
 
         {/* Annual Incident Statistics Dashboard Section */}
         <section className="stats-section" style={{ marginTop: '32px' }}>
@@ -1688,10 +1582,7 @@ function ReportForm({ user, lang = 'es', initialData = null }) {
     setForm(f => ({ ...f, location: '' }))
   }
 
-  const handleMapSelect = ({ floor, location }) => {
-    setSelectedFloor(floor)
-    setForm(f => ({ ...f, location }))
-  }
+
 
   const submit = async (event) => {
     event.preventDefault()
@@ -1823,13 +1714,7 @@ function ReportForm({ user, lang = 'es', initialData = null }) {
               </label>
             </div>
 
-            <div className="full">
-              <ArchitecturalSchoolMap
-                selectedLocation={form.location}
-                onSelectLocation={handleMapSelect}
-                lang={lang}
-              />
-            </div>
+
 
             <label>
               {t.fieldFloor}

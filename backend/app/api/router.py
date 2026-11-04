@@ -257,6 +257,67 @@ def send_reporter_whatsapp_receipt_task(
     except Exception as e:
         logger.warning(f"No se pudo enviar comprobante WhatsApp a {clean_digits}: {e}")
 
+
+def send_report_final_verdict_whatsapp_task(
+    phone_numbers: list[str],
+    public_code: str,
+    verdict: str,
+    observation: str | None,
+    incident_type: str,
+    incident_date: str,
+    time_range: str,
+    location: str,
+    summary: str,
+    recommendation: str | None,
+):
+    import asyncio
+    type_labels = {
+        "THEFT": "Hurto / Pérdida de Pertenencias",
+        "FIGHT": "Pelea o Agresión Física",
+        "INAPPROPRIATE_BEHAVIOR": "Conducta Inapropiada / Convivencia",
+        "AGGRESSION": "Agresión Verbal / Hostigamiento",
+        "BULLYING": "Acoso Escolar (Bullying)",
+        "DAMAGE": "Daño a Bienes de la Institución",
+        "ACCIDENT": "Accidente en Campus",
+        "UNSAFE_CONDUCT": "Conducta Insegura / Riesgo",
+        "OTHER": "Otro Caso Convivencial",
+    }
+    tipo_label = type_labels.get(incident_type, incident_type)
+
+    is_confirmed = verdict == "CONFIRMED"
+    verdict_badge = "✅ *CONFIRMADO (Evidencia Corroborada con Cámaras)*" if is_confirmed else "ℹ️ *NO CONCLUYENTE (Sin Evidencia Suficiente)*"
+
+    verdict_msg = (
+        "⚖️ *RESOLUCIÓN Y VEREDICTO FINAL — SISTEMA NEXIA* ⚖️\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "Se ha emitido el dictamen institucional definitivo para el caso radicado:\n"
+        f"🔒 *Código de Seguimiento:* `{public_code}`\n\n"
+        f"📊 *Veredicto Oficial:*\n{verdict_badge}\n\n"
+        f"📅 *Fecha del Suceso:* {incident_date}\n"
+        f"⏰ *Horario:* {time_range}\n"
+        f"📍 *Ubicación:* {location}\n"
+        f"⚠️ *Tipo de Incidente:* {tipo_label}\n\n"
+        f"🤖 *Dictamen del Análisis NEXIA IA:*\n{summary}\n\n"
+        f"📝 *Resolución y Observación del Comité:*\n{observation or 'Revisión técnica y directiva completada conforme a los protocolos institucionales.'}\n\n"
+        f"📋 *Acciones y Medidas Ley 1620:*\n{recommendation or 'Aplicar protocolo de mediación escolar y seguimiento formativo con coordinación.'}\n\n"
+        "🔗 *Consulta el expediente digital y resolución aquí:*\n"
+        f"https://nexia-platform-kappa.vercel.app/#track?code={public_code}\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "_Notificación formal emitida automáticamente por Plataforma NEXIA (Ley 1620 de 2013)_"
+    )
+
+    for raw_phone in phone_numbers:
+        clean_digits = "".join(filter(str.isdigit, raw_phone))
+        if len(clean_digits) == 10 and clean_digits.startswith("3"):
+            clean_digits = "57" + clean_digits
+        if not clean_digits:
+            continue
+        try:
+            asyncio.run(dispatch_automated_whatsapp(phone_number=clean_digits, message_text=verdict_msg))
+            logger.info(f"Veredicto WhatsApp enviado exitosamente a {clean_digits} para caso {public_code}")
+        except Exception as e:
+            logger.warning(f"No se pudo enviar veredicto WhatsApp a {clean_digits}: {e}")
+
 @api_router.post("/reports", response_model=ReportCreated, status_code=status.HTTP_201_CREATED, tags=["public"])
 def create_report(
     payload: ReportCreate,
@@ -1013,6 +1074,7 @@ def get_analysis(
 def save_decision(
     report_id: str,
     payload: DecisionRequest,
+    background: BackgroundTasks,
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> MessageResponse:
@@ -1025,7 +1087,35 @@ def save_decision(
     report.status = DecisionType(payload.decision)
     report.public_summary = "La revisión humana confirmó una coincidencia con el reporte." if payload.decision == DecisionType.CONFIRMED else "La revisión humana finalizó sin evidencia concluyente."
     db.commit()
-    return MessageResponse(message="Decisión guardada y estado público actualizado")
+
+    # Recopilar teléfonos para notificar el veredicto por WhatsApp
+    phones_to_notify = []
+    if report.reporter_phone:
+        phones_to_notify.append(report.reporter_phone)
+    if report.user and report.user.phone_number and report.user.phone_number not in phones_to_notify:
+        phones_to_notify.append(report.user.phone_number)
+
+    institutional_phone = "+573145813221"
+    if institutional_phone not in phones_to_notify:
+        phones_to_notify.append(institutional_phone)
+
+    time_str = f"{report.approximate_time_start.strftime('%H:%M')} a {report.approximate_time_end.strftime('%H:%M')}" if report.approximate_time_start and report.approximate_time_end else "el horario indicado"
+
+    background.add_task(
+        send_report_final_verdict_whatsapp_task,
+        phone_numbers=phones_to_notify,
+        public_code=report.public_code,
+        verdict=payload.decision,
+        observation=payload.observation,
+        incident_type=report.incident_type,
+        incident_date=str(report.incident_date),
+        time_range=time_str,
+        location=report.location,
+        summary=job.result.summary if job.result else "Análisis completado.",
+        recommendation=job.result.recommendation if job.result else None,
+    )
+
+    return MessageResponse(message="Decisión guardada y veredicto notificado a WhatsApp")
 
 
 # --- Gestión de Usuarios (Admin) ---

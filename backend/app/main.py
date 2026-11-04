@@ -108,6 +108,34 @@ async def lifespan(_: FastAPI):
                 db.add(default_admin)
                 db.commit()
 
+            # Asegurar usuarios institucionales de demostración
+            demo_users = [
+                ("Valentina Ríos Montoya", "valentina.rios@nexia.edu.co", "Estudiante", "JM", "1002", "+57 312 458 9921"),
+                ("Mateo Gómez Beltrán", "mateo.gomez@nexia.edu.co", "Estudiante", "JM", "1101", "+57 318 721 3456"),
+                ("Camila Sofía Hernández", "camila.hernandez@nexia.edu.co", "Estudiante", "JT", "903", "+57 310 892 4152"),
+                ("Santiago Salazar Duque", "santiago.salazar@nexia.edu.co", "Estudiante", "JM", "1001", "+57 314 581 3221"),
+                ("Mariana Castro Lozano", "mariana.castro@nexia.edu.co", "Estudiante", "JT", "1102", "+57 320 491 8273"),
+                ("Andrés Felipe Quintero", "andres.quintero@nexia.edu.co", "Estudiante", "JM", "802", "+57 313 847 2910"),
+                ("Daniela Morales Vivas", "daniela.morales@nexia.edu.co", "Estudiante", "JT", "1003", "+57 319 623 8194"),
+                ("Patricia Restrepo Cárdenas", "patricia.restrepo@gmail.com", "Acudiente", None, None, "+57 315 672 3910"),
+                ("Carlos Eduardo Mendoza", "carlos.mendoza@outlook.com", "Acudiente", None, None, "+57 311 239 8471"),
+                ("Claudia Marcela Peña", "claudia.pena@hotmail.com", "Acudiente", None, None, "+57 317 654 1289"),
+            ]
+            for full_name, email, rel, shift, course, phone in demo_users:
+                existing = db.query(User).filter(User.email == email).first()
+                if not existing:
+                    db.add(User(
+                        full_name=full_name,
+                        email=email,
+                        password_hash=hash_password("Nexia2026!"),
+                        institution_relation=rel,
+                        shift=shift,
+                        course=course,
+                        phone_number=phone,
+                        role=UserRole.USER,
+                    ))
+            db.commit()
+
             # Asegurar grabaciones base iniciales
             base_recordings = [
                 ("CAM-303", "rec_993eb514efb444d597779580e248b46d.mp4", "VID_20260904_121245.mp4", 1535736945, datetime(2026, 9, 5, 11, 30, 0), 600),
@@ -184,24 +212,64 @@ async def lifespan(_: FastAPI):
             except Exception as e:
                 print("Aviso al sincronizar grabaciones de S3:", e)
 
-            # Asegurar reporte estudiantil inicial si no existe ninguno
-            if db.query(Report).count() == 0:
-                admin_user = db.query(User).filter(User.role == UserRole.ADMIN).first()
-                sample_report = Report(
-                    id="84e5e69f-de69-4e33-938e-39f221662cc3",
-                    public_code="NEX-03OZB2NV",
-                    reporter_name="Angel Santiago Ortiz Andrade",
-                    incident_type="FIGHT",
-                    incident_date=datetime(2026, 9, 5).date(),
-                    approximate_time_start=datetime.strptime("11:37:00", "%H:%M:%S").time(),
-                    approximate_time_end=datetime.strptime("11:39:00", "%H:%M:%S").time(),
-                    location="Salón 303",
-                    description="Estaba en la parte de atras del salon y una persona se me acerco y me tiro el cuaderno y nos empezamos a pelear",
-                    status=ReportStatus.SUBMITTED,
-                    public_summary="Reporte registrado. Pendiente de aprobación para revisión de cámaras.",
-                    user_id=admin_user.id if admin_user else None,
-                )
-                db.add(sample_report)
+            # Asegurar reportes estudiantiles iniciales si hay pocos
+            if db.query(Report).count() < 3:
+                r1 = db.query(Report).filter(Report.public_code == "NEX-03OZB2NV").first()
+                if not r1:
+                    admin_user = db.query(User).filter(User.role == UserRole.ADMIN).first()
+                    db.add(Report(
+                        id="84e5e69f-de69-4e33-938e-39f221662cc3",
+                        public_code="NEX-03OZB2NV",
+                        reporter_name="Angel Santiago Ortiz Andrade",
+                        reporter_phone="+57 314 581 3221",
+                        incident_type="FIGHT",
+                        incident_date=datetime(2026, 11, 2).date(),
+                        approximate_time_start=datetime.strptime("11:37:00", "%H:%M:%S").time(),
+                        approximate_time_end=datetime.strptime("11:39:00", "%H:%M:%S").time(),
+                        location="Salón 303",
+                        description="Estaba en la parte de atrás del salón y una persona se me acercó, me tiró el cuaderno y nos empezamos a pelear.",
+                        status=ReportStatus.SUBMITTED,
+                        public_summary="Reporte registrado. Pendiente de aprobación para revisión de cámaras.",
+                        user_id=admin_user.id if admin_user else None,
+                    ))
+
+                r2 = db.query(Report).filter(Report.public_code == "NEX-718293B4").first()
+                if not r2:
+                    val_user = db.query(User).filter(User.email == "valentina.rios@nexia.edu.co").first()
+                    db.add(Report(
+                        id="93f6e70a-ef70-4f44-a49e-40f332773dd4",
+                        public_code="NEX-718293B4",
+                        reporter_name="Valentina Ríos Montoya",
+                        reporter_phone="+57 312 458 9921",
+                        incident_type="BULLYING",
+                        incident_date=datetime(2026, 11, 3).date(),
+                        approximate_time_start=datetime.strptime("10:15:00", "%H:%M:%S").time(),
+                        approximate_time_end=datetime.strptime("10:45:00", "%H:%M:%S").time(),
+                        location="Salón 204",
+                        description="Durante el cambio de clase varios estudiantes del salón contiguo estuvieron empujando e intimidando verbalmente a mi compañera de puesto.",
+                        status=ReportStatus.SUBMITTED,
+                        public_summary="Reporte recibido bajo reserva de identidad. Enlace técnico activo a cámara CAM-204.",
+                        user_id=val_user.id if val_user else None,
+                    ))
+
+                r3 = db.query(Report).filter(Report.public_code == "NEX-492105C8").first()
+                if not r3:
+                    mat_user = db.query(User).filter(User.email == "mateo.gomez@nexia.edu.co").first()
+                    db.add(Report(
+                        id="a4f7e81b-ff81-4a55-b5af-51f443884ee5",
+                        public_code="NEX-492105C8",
+                        reporter_name="Mateo Gómez Beltrán",
+                        reporter_phone="+57 318 721 3456",
+                        incident_type="FIGHT",
+                        incident_date=datetime(2026, 11, 1).date(),
+                        approximate_time_start=datetime.strptime("14:20:00", "%H:%M:%S").time(),
+                        approximate_time_end=datetime.strptime("14:40:00", "%H:%M:%S").time(),
+                        location="Patio Canchas - Bicicletero",
+                        description="Discusión acalorada y forcejeo entre dos estudiantes por un turno en las canchas durante el descanso de la tarde.",
+                        status="CONFIRMED",
+                        public_summary="La revisión técnica confirmó una coincidencia con el reporte en cámara CAM-P1-BICIS. Protocolo Ley 1620 aplicado.",
+                        user_id=mat_user.id if mat_user else None,
+                    ))
                 db.commit()
     except Exception as e:
         print("Error en inicialización de base de datos:", e)
