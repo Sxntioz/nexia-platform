@@ -213,3 +213,16 @@ def test_update_recording(client, admin_headers):
     assert updated["duration_seconds"] == 600
     assert "2026-09-02T15:30:00" in updated["recording_started_at"]
 
+
+
+def test_admin_delete_report(client, admin_headers, auth_headers):
+    report_res = client.post("/api/reports", json=report_payload(), headers=auth_headers)
+    assert report_res.status_code == 201
+    report_id = report_res.json()["id"]
+
+    del_res = client.delete(f"/api/admin/reports/{report_id}", headers=admin_headers)
+    assert del_res.status_code == 200
+    assert del_res.json()["ok"] is True
+
+    get_res = client.get(f"/api/admin/reports/{report_id}", headers=admin_headers)
+    assert get_res.status_code == 404

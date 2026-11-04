@@ -1549,17 +1549,7 @@ function AuthModal({ isOpen, onClose, defaultTab = 'register', nextRoute, onAuth
 
 
 function LinkedCameraCoverPreview({ camera, location, lang = 'es' }) {
-  const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString())
-
-  useEffect(() => {
-    const t = setInterval(() => {
-      setCurrentTime(new Date().toLocaleTimeString())
-    }, 1000)
-    return () => clearInterval(t)
-  }, [])
-
   if (!camera || !location) return null
-  const hasRecording = Boolean(camera.recording_id)
 
   return (
     <div className="camera-cover-preview-card">
@@ -1579,86 +1569,24 @@ function LinkedCameraCoverPreview({ camera, location, lang = 'es' }) {
           <span className="badge success">
             <span aria-hidden="true" /> {lang === 'es' ? 'Cobertura Activa' : 'Active Area Coverage'}
           </span>
-          <span className="cover-tech-tag">1080p FHD · 30fps · FOV 94°</span>
+          <span className="cover-tech-tag">1080p FHD · Respaldo Ley 1620</span>
         </div>
       </div>
 
-      <div className="cover-viewport-frame">
-        <div className="cover-hud-top">
-          <div className="cover-hud-rec">
-            <span className="hud-rec-circle" />
-            <span>REC ● CCTV NEXIA</span>
-          </div>
-          <div className="cover-hud-time">
-            <span>{currentTime} COT</span>
-          </div>
-        </div>
-
-        {hasRecording ? (
-          <div className="cover-video-wrapper">
-            <video
-              src={`${API_BASE_URL}/recordings/${camera.recording_id}/stream`}
-              autoPlay
-              loop
-              muted
-              playsInline
-              className="cover-video-stream"
-            />
-            <div className="cover-video-overlay-reticle">
-              <div className="reticle-box">
-                <span className="reticle-tag">{lang === 'es' ? 'ÁREA MONITOREADA' : 'MONITORED AREA'}</span>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="cover-simulated-viewfinder">
-            <div className="viewfinder-grid-lines" />
-            <div className="viewfinder-crosshair" />
-            <div className="viewfinder-center-info">
-              <div className="viewfinder-icon-ring">
-                <Icon name="video" size={32} />
-              </div>
-              <h4>{lang === 'es' ? 'VISTA PREVIA DE COBERTURA CCTV' : 'CCTV COVERAGE PREVIEW'}</h4>
-              <p>
-                {lang === 'es'
-                  ? `Señal sincronizada: ${camera.identifier} con cobertura sobre ${location}.`
-                  : `Synchronized feed: ${camera.identifier} covering ${location}.`}
-              </p>
-              <div className="viewfinder-specs">
-                <span>RTSP · STREAM: {camera.identifier}</span>
-                <span>CODEC: H.265 / HEVC</span>
-                <span>STATUS: ONLINE ●</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="cover-hud-bottom">
-          <div className="cover-hud-brand">
-            <img src="/logo.png" alt="NEXIA" className="cover-watermark-logo" />
-            <span>NEXIA VISION MATRIX · GRUPO NEXUS</span>
-          </div>
-          <div className="cover-hud-coords">
-            <span>CAM_ZOOM: 1.0X</span>
-            <span>SEC_LEVEL: HIGH</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="cover-card-footer">
+      <div className="cover-card-footer" style={{ borderTop: 'none', background: 'rgba(56, 189, 248, 0.05)' }}>
         <div className="cover-guarantee-icon">
           <Icon name="shield" size={20} />
         </div>
         <div className="cover-guarantee-text">
           <strong>
             {lang === 'es'
-              ? 'Garantía de Respaldo Objetivo y Protección de Identidad:'
-              : 'Objective Evidence Guarantee & Identity Protection:'}
+              ? 'Área con Monitoreo y Cobertura CCTV Enlazada:'
+              : 'Area with CCTV Monitoring & Active Link:'}
           </strong>
           <p>
             {lang === 'es'
-              ? 'Al radicar tu reporte, el motor de IA NEXIA analizará automáticamente este ángulo de cámara en el rango horario indicado para contrastar los hechos. Tu identidad permanecerá en estricta reserva institucional sin reconocimiento facial invasivo (Ley 1620 de 2013).'
-              : 'Upon submission, NEXIA AI automatically correlates this camera angle during the reported time window to objectively verify facts. Your identity remains strictly confidential under student protection laws.'}
+              ? `El sistema ha enlazado automáticamente el ángulo de la cámara ${camera.identifier} correspondiente a ${location}. Por confidencialidad institucional y protección de menores (Ley 1620), las grabaciones se mantienen en custodia encriptada del comité escolar y no son visibles públicamente al reportar.`
+              : `The system has linked camera ${camera.identifier} covering ${location}. Under student privacy laws, video footage is strictly kept under encrypted school committee custody and cannot be viewed publicly during report creation.`}
           </p>
         </div>
       </div>
@@ -4681,6 +4609,18 @@ function AdminDashboard({ user }) {
   const [busy, setBusy] = useState(true)
   const [error, setError] = useState('')
 
+  const handleDeleteReport = async (reportId, publicCode) => {
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar permanentemente el caso ${publicCode}? Se borrarán también las evidencias y análisis asociados.`)) {
+      return
+    }
+    try {
+      await apiRequest(`/admin/reports/${reportId}`, { method: 'DELETE' })
+      setReports(prev => prev.filter(r => r.id !== reportId))
+    } catch (err) {
+      alert(`Error al eliminar: ${err.message}`)
+    }
+  }
+
   const load = useCallback(async () => {
     setBusy(true)
     setError('')
@@ -4750,9 +4690,19 @@ function AdminDashboard({ user }) {
                       <td>{r.location}</td>
                       <td><Badge status={r.status} /></td>
                       <td>
-                        <button className="button primary small" onClick={() => navigate('detail', r.id)}>
-                          Revisar caso
-                        </button>
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                          <button className="button primary small" onClick={() => navigate('detail', r.id)}>
+                            Revisar
+                          </button>
+                          <button
+                            className="button danger small"
+                            title="Eliminar reporte permanentemente"
+                            onClick={() => handleDeleteReport(r.id, r.public_code)}
+                            style={{ padding: '6px 9px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                          >
+                            <Icon name="trash" size={14} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -6161,7 +6111,25 @@ function AdminDetail({ reportId, user }) {
             <h1 style={{ margin: '4px 0 6px', fontSize: '1.45rem', fontFamily: 'monospace' }}>{report.public_code}</h1>
             <Badge status={report.status} />
           </div>
-          <small style={{ color: 'var(--text-muted)' }}>Recibido {new Date(report.created_at).toLocaleString('es-CO')}</small>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            <small style={{ color: 'var(--text-muted)' }}>Recibido {new Date(report.created_at).toLocaleString('es-CO')}</small>
+            <button
+              className="button danger small"
+              onClick={async () => {
+                if (window.confirm(`¿Estás seguro de que deseas eliminar permanentemente el caso ${report.public_code}? Se borrarán también las evidencias y análisis asociados.`)) {
+                  try {
+                    await apiRequest(`/admin/reports/${report.id}`, { method: 'DELETE' })
+                    navigate('admin')
+                  } catch (err) {
+                    setError(err.message)
+                  }
+                }
+              }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+            >
+              <Icon name="trash" size={14} /> Eliminar Caso
+            </button>
+          </div>
         </div>
 
         {error && <Notice type="danger">{error}</Notice>}

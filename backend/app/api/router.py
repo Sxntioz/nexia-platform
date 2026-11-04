@@ -455,19 +455,29 @@ def reject_report(
     return admin_report_dict(report)
 
 
+@api_router.delete("/admin/reports/{report_id}", tags=["admin"])
+def delete_report(
+    report_id: str,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    report = get_report_or_404(db, report_id)
+    public_code = report.public_code
+    db.delete(report)
+    db.commit()
+    return {"ok": True, "message": f"Reporte {public_code} eliminado permanentemente."}
+
+
 @api_router.get("/cameras/public-catalog", tags=["cameras"])
 def get_public_cameras_catalog(db: Session = Depends(get_db)):
     """Catálogo público de cámaras activas para enlazamiento en reportes estudiantiles."""
     cameras = list(db.scalars(select(Camera).where(Camera.is_active.is_(True)).order_by(Camera.identifier)).all())
-    recordings = list(db.scalars(select(CameraRecording)).all())
-    rec_map = {r.camera_id: r.id for r in recordings}
     return [
         {
             "id": cam.id,
             "identifier": cam.identifier,
             "label": cam.label,
             "location": cam.location,
-            "recording_id": rec_map.get(cam.id),
         }
         for cam in cameras
     ]
