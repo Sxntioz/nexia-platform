@@ -74,9 +74,9 @@ export const translations = {
     btnDownloadOfficialPdf: 'Descargar PDF Oficial',
 
     // CCTV Vision Matrix (Demo)
-    cctvTitle: 'NEXIA Vision Matrix — CCTV en Tiempo Real (Demo)',
-    cctvSubtitle: 'Centro de auditoría y monitoreo visual escolar. Permite verificar flujos de video de cámaras por piso, simular analítica de IA y reproducir grabaciones cargadas en el servidor.',
-    cctvLiveIndicator: 'TRANSMISIÓN EN VIVO (DEMO)',
+    cctvTitle: 'NEXIA Vision Matrix — CCTV en Tiempo Real',
+    cctvSubtitle: 'Centro de auditoría y monitoreo visual escolar. Permite verificar flujos de video de cámaras por piso, analítica avanzada de IA y reproducir grabaciones cargadas en el servidor.',
+    cctvLiveIndicator: 'TRANSMISIÓN EN VIVO',
     cctvModeSpotlight: 'Monitor Principal',
     cctvModeGrid2x2: 'Grilla 2x2',
     cctvModeGrid3x3: 'Matriz 3x3',
@@ -229,9 +229,9 @@ export const translations = {
     btnDownloadOfficialPdf: 'Download Official PDF',
 
     // CCTV Vision Matrix (Demo)
-    cctvTitle: 'NEXIA Vision Matrix — Real-Time CCTV (Demo)',
+    cctvTitle: 'NEXIA Vision Matrix — Real-Time CCTV',
     cctvSubtitle: 'School visual monitoring and audit command center. Monitor cameras across floors, simulate AI analytics, and playback server-stored recordings.',
-    cctvLiveIndicator: 'LIVE BROADCAST (DEMO)',
+    cctvLiveIndicator: 'LIVE BROADCAST',
     cctvModeSpotlight: 'Spotlight Monitor',
     cctvModeGrid2x2: '2x2 Grid',
     cctvModeGrid3x3: '3x3 Matrix',

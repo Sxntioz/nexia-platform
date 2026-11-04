@@ -474,7 +474,7 @@ function Header({ user, theme, lang = 'es', onToggleTheme, onToggleLang, onLogou
                     <Icon name="file" size={17} /> <span>Reportes y Casos</span>
                   </button>
                   <button className="mobile-link mobile-admin-link" onClick={() => handleNav('admin_cctv')}>
-                    <Icon name="video" size={17} /> <span>CCTV Matrix Live (Demo)</span>
+                    <Icon name="video" size={17} /> <span>CCTV Matrix Live</span>
                   </button>
                   <button
                     className="mobile-link mobile-admin-link"
@@ -752,10 +752,10 @@ function NexiaChatbot({ user, lang = 'es' }) {
     setSuggestions(
       lang === 'es'
         ? (contextMode === 'admin'
-            ? ['¿Cómo funciona la Matriz CCTV en Vivo (Demo)?', '¿Cómo interpretar la confianza de NEXIA?', 'Gestión de sanciones y apelaciones']
+            ? ['¿Cómo funciona la Matriz CCTV en Vivo?', '¿Cómo interpretar la confianza de NEXIA?', 'Gestión de sanciones y apelaciones']
             : ['¿Cómo crear un reporte?', '¿Por qué poner un rango de tiempo exacto?', '¿Mi identidad está protegida?'])
         : (contextMode === 'admin'
-            ? ['How does the CCTV Matrix Live Demo work?', 'How to interpret NEXIA confidence?', 'Sanctions & appeals management']
+            ? ['How does the CCTV Matrix Live work?', 'How to interpret NEXIA confidence?', 'Sanctions & appeals management']
             : ['How do I create a report?', 'Why is an exact time range needed?', 'Is my identity protected?'])
     )
   }, [lang, contextMode, t.chatGreeting])
@@ -1047,7 +1047,7 @@ function Home({ user, lang = 'es' }) {
               <Icon name="camera" size={24} />
             </div>
             <h3>{lang === 'es' ? 'Transmitir en Vivo (CCTV)' : 'Live CCTV Broadcast'}</h3>
-            <p>{lang === 'es' ? 'Conecta una cámara en tiempo real a la matriz CCTV escolar y audita eventos con Gemini IA.' : 'Connect a camera in real-time to the school CCTV matrix and audit events with Gemini AI.'}</p>
+            <p>{lang === 'es' ? 'Conecta una cámara en tiempo real a la matriz CCTV escolar y audita eventos con el Motor de IA NEXIA.' : 'Connect a camera in real-time to the school CCTV matrix and audit events with the NEXIA AI Engine.'}</p>
             <button
               className="button primary full-width"
               onClick={() => navigate('cctv_broadcast')}
@@ -1264,6 +1264,7 @@ function AuthModal({ isOpen, onClose, defaultTab = 'register', nextRoute, onAuth
     institution_relation: '',
     shift: '',
     course: '',
+    phone_number: '',
     email: '',
     password: '',
   })
@@ -1501,6 +1502,19 @@ function AuthModal({ isOpen, onClose, defaultTab = 'register', nextRoute, onAuth
             )}
 
             <label>
+              WhatsApp / Celular (Opcional)
+              <input
+                type="tel"
+                placeholder="Ej: +57 314 581 3221"
+                value={registerForm.phone_number}
+                onChange={(e) => setRegisterForm({ ...registerForm, phone_number: e.target.value })}
+              />
+              <small style={{ color: 'var(--text-muted)', fontSize: '0.74rem' }}>
+                Te enviaremos el comprobante oficial y seguimiento de tus radicados a tu WhatsApp.
+              </small>
+            </label>
+
+            <label>
               Correo electrónico
               <input
                 type="email"
@@ -1661,6 +1675,7 @@ function ReportForm({ user, lang = 'es', initialData = null }) {
     approximate_time_end: '',
     location: initialData?.location || '',
     description: '',
+    reporter_phone: user?.phone_number || '',
   })
   const [selectedFloor, setSelectedFloor] = useState(initialData?.floor || '')
   const [busy, setBusy] = useState(false)
@@ -1800,6 +1815,11 @@ function ReportForm({ user, lang = 'es', initialData = null }) {
             <div style={{ fontSize: '2rem', fontWeight: 800, fontFamily: 'monospace', color: 'var(--accent-cyan)', letterSpacing: '0.08em', marginTop: '6px' }}>
               {created.public_code}
             </div>
+            {created.whatsapp_sent && (
+              <div style={{ marginTop: '12px', padding: '10px 14px', background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '10px', color: '#10b981', fontSize: '0.86rem', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                <span>📲</span> Comprobante oficial de radicación enviado a tu WhatsApp en tiempo real.
+              </div>
+            )}
           </div>
 
           <div className="actions centered">
@@ -1921,6 +1941,20 @@ function ReportForm({ user, lang = 'es', initialData = null }) {
                 />
               </div>
             )}
+
+            <label className="full">
+              📱 WhatsApp para recibir comprobante de radicación (Opcional)
+              <input
+                type="tel"
+                name="reporter_phone"
+                value={form.reporter_phone || ''}
+                onChange={update}
+                placeholder="Ej: +57 314 581 3221"
+              />
+              <small style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                Te llegará de inmediato un mensaje oficial de WhatsApp con tu código anónimo y los detalles del reporte.
+              </small>
+            </label>
 
             <label className="full">
               {t.fieldDescription}
@@ -2079,7 +2113,7 @@ function AdminLayout({ children, active = 'reports', user }) {
             className={active === 'cctv' ? 'active' : ''}
             onClick={() => navigate('admin_cctv')}
           >
-            <Icon name="video" /> CCTV Matrix Live (Demo)
+            <Icon name="video" /> CCTV Matrix Live
           </button>
           <button
             className={active === 'cameras' ? 'active' : ''}
@@ -2661,7 +2695,7 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
       cleanNum = '57' + cleanNum
     }
     const now = new Date()
-    const testMsg = `🚨 *ALERTA EN VIVO — SISTEMA NEXIA IA* 🚨\n━━━━━━━━━━━━━━━━━━━━━\n📅 *Fecha:* ${now.toLocaleDateString()}\n⏰ *Hora:* ${now.toLocaleTimeString()}\n📍 *Lugar / Cámara:* Cámara Salón 201 (Verificación Automática)\n⚠️ *Hecho Detectado:* Enlace Directo WhatsApp Verificado\n🔍 *Fidelidad IA:* Alta fidelidad\n\n📝 *Detalle:* Se ha vinculado exitosamente esta línea de WhatsApp para recepción inmediata y automática de reportes y alertas en tiempo real generadas por Gemini IA.\n\n📋 *Recomendación Ley 1620:* Línea directiva habilitada para actuación inmediata.\n\n🔗 *Ver Circuito CCTV en Vivo:*\nhttps://nexia-platform.vercel.app/#admin_cctv\n━━━━━━━━━━━━━━━━━━━━━\n_Notificación institucional generada por Motor NEXIA Vision IA_`
+    const testMsg = `🚨 *ALERTA EN VIVO — SISTEMA NEXIA IA* 🚨\n━━━━━━━━━━━━━━━━━━━━━\n📅 *Fecha:* ${now.toLocaleDateString()}\n⏰ *Hora:* ${now.toLocaleTimeString()}\n📍 *Lugar / Cámara:* Cámara Salón 201 (Verificación Automática)\n⚠️ *Hecho Detectado:* Enlace Directo WhatsApp Verificado\n🔍 *Fidelidad IA:* Alta fidelidad\n\n📝 *Detalle:* Se ha vinculado exitosamente esta línea de WhatsApp para recepción inmediata y automática de reportes y alertas en tiempo real generadas por el Motor NEXIA Vision IA.\n\n📋 *Recomendación Ley 1620:* Línea directiva habilitada para actuación inmediata.\n\n🔗 *Ver Circuito CCTV en Vivo:*\nhttps://nexia-platform-kappa.vercel.app/#admin_cctv\n━━━━━━━━━━━━━━━━━━━━━\n_Notificación institucional generada por Motor NEXIA Vision IA_`
     const clientWaLink = `https://wa.me/${cleanNum}?text=${encodeURIComponent(testMsg)}`
     
     try {
@@ -2758,7 +2792,7 @@ function WhatsAppConfigModal({ isOpen, onClose, config, onSaveConfig }) {
             </div>
 
             <p style={{ fontSize: '0.82rem', color: '#94a3b8', lineHeight: 1.4, margin: '8px 0 0' }}>
-              Configura la línea oficial a la cual el Motor Gemini IA enviará alertas instantáneas (con fecha, hora, cámara, diagnóstico y recomendación de Ley 1620) al detectar anomalías durante la transmisión.
+              Configura la línea oficial a la cual el Motor de IA NEXIA enviará alertas instantáneas (con fecha, hora, cámara, diagnóstico y recomendación de Ley 1620) al detectar anomalías durante la transmisión.
             </p>
           </div>
 
@@ -3020,7 +3054,7 @@ function LiveIncidentAlertModal({ alert, onClose, onFileReport }) {
           <span style={{ fontSize: '2.4rem', animation: 'pulse-live-dot 1.5s infinite ease-in-out' }}>🚨</span>
           <div>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', fontWeight: 800, color: '#ef4444', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-              <span className="live-pulse" /> ALERTA CRÍTICA EN VIVO · MOTOR GEMINI IA
+              <span className="live-pulse" /> ALERTA CRÍTICA EN VIVO · MOTOR NEXIA VISION IA
             </div>
             <h2 style={{ margin: '2px 0 0', fontSize: '1.35rem', fontWeight: 800, color: '#f8fafc' }}>
               {alert.title || 'Incidente Detectado en Tiempo Real'}
@@ -3789,7 +3823,7 @@ function CCTVBroadcaster({ user }) {
             <h4 style={{ margin: '0 0 6px', color: '#10b981' }}>✅ Transmisión Guardada Exitosamente</h4>
             <p style={{ margin: 0, fontSize: '0.88rem', color: '#e2e8f0' }}>
               Duración grabada: <strong>{formatTimer(successInfo.duration)}</strong> ({formatBytes(successInfo.bytes)}).
-              Este video ya está registrado y listo en el depósito para que Gemini IA recorte y analice cualquier reporte escolar.
+              Este video ya está registrado y listo en el depósito para que el Motor de IA NEXIA recorte y analice cualquier reporte escolar.
             </p>
             <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
               <button
@@ -4021,7 +4055,7 @@ function CCTVBroadcaster({ user }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '1.4rem' }}>🤖</span>
               <div>
-                <strong style={{ fontSize: '0.95rem', color: '#f8fafc', display: 'block' }}>Centinela Autónomo Gemini IA</strong>
+                <strong style={{ fontSize: '0.95rem', color: '#f8fafc', display: 'block' }}>Centinela Autónomo NEXIA IA</strong>
                 <small style={{ color: 'var(--text-muted)' }}>Reconocimiento de personas y convivencia escolar</small>
               </div>
             </div>
@@ -4106,7 +4140,7 @@ function CCTVBroadcaster({ user }) {
             </div>
           ) : (
             <div style={{ padding: '14px', background: 'rgba(2, 6, 23, 0.4)', borderRadius: '10px', fontSize: '0.82rem', color: '#94a3b8', textAlign: 'center' }}>
-              Toca <strong>"👁️ Analizar Escena Ahora"</strong> o inicia la transmisión para que el Motor Gemini IA reconozca a las personas y audite la convivencia en tiempo real.
+              Toca <strong>"👁️ Analizar Escena Ahora"</strong> o inicia la transmisión para que el Motor NEXIA Vision IA reconozca a las personas y audite la convivencia en tiempo real.
             </div>
           )}
 
@@ -4147,7 +4181,7 @@ function CCTVBroadcaster({ user }) {
 
 
 /* =========================================================================
-   NEXIA Vision Matrix — CCTV en Tiempo Real (Demo)
+   NEXIA Vision Matrix — CCTV en Tiempo Real
    ========================================================================= */
 function AdminLiveCCTV({ user, lang = 'es' }) {
   const [cameras, setCameras] = useState([])
@@ -4254,7 +4288,7 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
       } else {
         setAuditToast({
           type: 'success',
-          text: `✅ ${target.label}: Convivencia pacífica observada por Gemini IA. No se detectan anomalías.`
+          text: `✅ ${target.label}: Convivencia pacífica observada por el Motor NEXIA IA. No se detectan anomalías.`
         })
         setTimeout(() => setAuditToast(null), 6000)
       }
@@ -4315,7 +4349,7 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
               className="button secondary small"
               onClick={() => setWhatsappModal(true)}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', borderColor: 'rgba(37, 211, 102, 0.4)', color: '#25D366', fontWeight: 700 }}
-              title="Configurar teléfono institucional para alertas de Gemini IA"
+              title="Configurar teléfono institucional para alertas de NEXIA IA"
             >
               <span style={{ fontSize: '1rem' }}>📲</span> Alertas WhatsApp
             </button>
@@ -4324,9 +4358,9 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
               onClick={handleAuditSelectedCam}
               disabled={auditBusy}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', borderColor: 'rgba(56, 189, 248, 0.4)', color: 'var(--accent-cyan)', fontWeight: 700 }}
-              title="Auditar la cámara actual en directo con Gemini IA"
+              title="Auditar la cámara actual en directo con NEXIA IA"
             >
-              {auditBusy ? '⏳ Analizando...' : '🤖 Auditar con Gemini'}
+              {auditBusy ? '⏳ Analizando...' : '🤖 Auditar con NEXIA IA'}
             </button>
             <button
               className="button primary small"
@@ -4626,7 +4660,7 @@ function AdminLiveCCTV({ user, lang = 'es' }) {
           onSaveConfig={setWhatsappConfig}
         />
 
-        {/* Modal de Alerta Crítica en Vivo por Gemini IA */}
+        {/* Modal de Alerta Crítica en Vivo por NEXIA IA */}
         <LiveIncidentAlertModal
           alert={activeAlert}
           onClose={() => setActiveAlert(null)}
@@ -6336,7 +6370,7 @@ function AdminDetail({ reportId, user }) {
                   </span>
                 </div>
 
-                {/* Alerta y recomendación de fidelidad de Gemini */}
+                {/* Alerta y recomendación de fidelidad de NEXIA IA */}
                 <div style={{
                   padding: '14px 16px',
                   borderRadius: '12px',

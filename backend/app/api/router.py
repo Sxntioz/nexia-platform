@@ -130,6 +130,7 @@ def register(payload: UserRegister, db: Session = Depends(get_db)) -> TokenRespo
         institution_relation=payload.institution_relation,
         shift=payload.shift if payload.institution_relation == "Estudiante" else None,
         course=payload.course.strip() if (payload.institution_relation == "Estudiante" and payload.course) else None,
+        phone_number=payload.phone_number.strip() if payload.phone_number else None,
         role=UserRole.USER,
     )
     db.add(user)
@@ -147,6 +148,7 @@ def register(payload: UserRegister, db: Session = Depends(get_db)) -> TokenRespo
             institution_relation=user.institution_relation,
             shift=user.shift,
             course=user.course,
+            phone_number=user.phone_number,
             role=user.role,
             created_at=user.created_at,
         ),
@@ -176,6 +178,7 @@ def login(payload: UserLogin, db: Session = Depends(get_db)) -> TokenResponse:
             institution_relation=user.institution_relation,
             shift=user.shift,
             course=user.course,
+            phone_number=user.phone_number,
             role=user.role,
             created_at=user.created_at,
         ),
@@ -191,6 +194,7 @@ def get_me(current_user: User = Depends(get_current_user)) -> UserResponse:
         institution_relation=current_user.institution_relation,
         shift=current_user.shift,
         course=current_user.course,
+        phone_number=current_user.phone_number,
         role=current_user.role,
         created_at=current_user.created_at,
     )
@@ -198,9 +202,65 @@ def get_me(current_user: User = Depends(get_current_user)) -> UserResponse:
 
 # --- Reportes ---
 
+
+def send_reporter_whatsapp_receipt_task(
+    phone: str,
+    reporter_name: str,
+    public_code: str,
+    incident_date: str,
+    time_range: str,
+    location: str,
+    incident_type: str,
+    description: str,
+):
+    import asyncio
+    clean_digits = "".join(filter(str.isdigit, phone))
+    if len(clean_digits) == 10 and clean_digits.startswith("3"):
+        clean_digits = "57" + clean_digits
+    if not clean_digits:
+        return
+
+    type_labels = {
+        "THEFT": "Hurto / Pérdida de Pertenencias",
+        "FIGHT": "Pelea o Agresión Física",
+        "INAPPROPRIATE_BEHAVIOR": "Conducta Inapropiada / Convivencia",
+        "AGGRESSION": "Agresión Verbal / Hostigamiento",
+        "BULLYING": "Acoso Escolar (Bullying)",
+        "DAMAGE": "Daño a Bienes de la Institución",
+        "ACCIDENT": "Accidente en Campus",
+        "UNSAFE_CONDUCT": "Conducta Insegura / Riesgo",
+        "OTHER": "Otro Caso Convivencial",
+    }
+    tipo_label = type_labels.get(incident_type, incident_type)
+
+    receipt_msg = (
+        "📋 *COMPROBANTE DE RADICACIÓN — SISTEMA NEXIA* 📋\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        f"Hola *{reporter_name}*, tu reporte ha sido radicado exitosamente y se encuentra bajo custodia institucional (Ley 1620 de 2013).\n\n"
+        "🔒 *Código Anónimo de Seguimiento:*\n"
+        f"`{public_code}`\n\n"
+        f"📅 *Fecha del Suceso:* {incident_date}\n"
+        f"⏰ *Horario Reportado:* {time_range}\n"
+        f"📍 *Ubicación / Salón:* {location}\n"
+        f"⚠️ *Tipo de Hecho:* {tipo_label}\n\n"
+        f"📝 *Descripción Radicada:*\n{description}\n\n"
+        "🛡️ *Garantía de Protección y Cobertura:*\n"
+        "Tu identidad está protegida bajo reserva. El sistema ha enlazado automáticamente la cobertura visual de cámaras del área para contrastar los hechos de forma objetiva ante el comité de convivencia escolar.\n\n"
+        "🔗 *Consulta el estado y avance de tu caso aquí:*\n"
+        f"https://nexia-platform-kappa.vercel.app/#track?code={public_code}\n"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "_Comprobante institucional emitido por Plataforma NEXIA_"
+    )
+    try:
+        asyncio.run(dispatch_automated_whatsapp(phone_number=clean_digits, message_text=receipt_msg))
+        logger.info(f"Comprobante WhatsApp enviado exitosamente a {clean_digits} para radicado {public_code}")
+    except Exception as e:
+        logger.warning(f"No se pudo enviar comprobante WhatsApp a {clean_digits}: {e}")
+
 @api_router.post("/reports", response_model=ReportCreated, status_code=status.HTTP_201_CREATED, tags=["public"])
 def create_report(
     payload: ReportCreate,
+    background: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -238,7 +298,31 @@ def create_report(
     db.add(report)
     db.commit()
     db.refresh(report)
-    return {"id": report.id, "public_code": report.public_code, "status": report.status, "created_at": report.created_at}
+
+    target_phone = (payload.reporter_phone or getattr(current_user, "phone_number", None) or "").strip()
+    whatsapp_sent = False
+    if target_phone:
+        time_str = f"{payload.approximate_time_start.strftime('%I:%M %p')} a {payload.approximate_time_end.strftime('%I:%M %p')}"
+        background.add_task(
+            send_reporter_whatsapp_receipt_task,
+            phone=target_phone,
+            reporter_name=current_user.full_name,
+            public_code=report.public_code,
+            incident_date=str(payload.incident_date),
+            time_range=time_str,
+            location=payload.location,
+            incident_type=str(payload.incident_type),
+            description=payload.description,
+        )
+        whatsapp_sent = True
+
+    return {
+        "id": report.id,
+        "public_code": report.public_code,
+        "status": report.status,
+        "created_at": report.created_at,
+        "whatsapp_sent": whatsapp_sent,
+    }
 
 
 
@@ -1570,7 +1654,7 @@ def format_whatsapp_alert_message(
         f"📝 *Detalle:* {description}\n\n"
         f"📋 *Recomendación Ley 1620:* {suggested_action or 'Verificar de inmediato en el aula y aplicar protocolo de mediación escolar.'}\n\n"
         "🔗 *Ver Circuito CCTV en Vivo:*\n"
-        "https://nexia-platform.vercel.app/#admin_cctv\n"
+        "https://nexia-platform-kappa.vercel.app/#admin_cctv\n"
         "━━━━━━━━━━━━━━━━━━━━━\n"
         "_Notificación institucional generada automáticamente por Motor NEXIA Vision IA_"
     )

@@ -21,13 +21,23 @@ async def lifespan(_: FastAPI):
         engine = get_engine()
         Base.metadata.create_all(engine)
 
-        # Migración ligera para agregar user_id en SQLite si ya existía reports
+        # Migraciones ligeras para asegurar columnas en SQLite / PostgreSQL
         with engine.connect() as conn:
             try:
                 conn.execute(text("ALTER TABLE reports ADD COLUMN user_id VARCHAR(36) REFERENCES users(id) ON DELETE SET NULL"))
                 conn.commit()
             except Exception:
-                pass  # Columna ya existe
+                pass
+            try:
+                conn.execute(text("ALTER TABLE users ADD COLUMN phone_number VARCHAR(30)"))
+                conn.commit()
+            except Exception:
+                pass
+            try:
+                conn.execute(text("ALTER TABLE reports ADD COLUMN reporter_phone VARCHAR(30)"))
+                conn.commit()
+            except Exception:
+                pass
 
         with get_session_factory()() as db:
             # Sincronizar catálogo de cámaras

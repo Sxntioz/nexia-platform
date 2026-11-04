@@ -17,6 +17,7 @@ class UserRegister(BaseModel):
     institution_relation: Literal["Estudiante", "Acudiente"]
     shift: Literal["JM", "JT"] | None = None
     course: str | None = Field(default=None, max_length=40)
+    phone_number: str | None = Field(default=None, max_length=30)
 
     @field_validator("email")
     @classmethod
@@ -49,10 +50,12 @@ class UserResponse(BaseModel):
     institution_relation: str
     shift: str | None = None
     course: str | None = None
+    phone_number: str | None = None
     role: str
     is_sanctioned: bool = False
     sanction_reason: str | None = None
     created_at: datetime
+    whatsapp_sent: bool = False
 
 
 class UserRoleUpdate(BaseModel):
@@ -97,6 +100,7 @@ class ReportCreate(BaseModel):
     location: str = Field(min_length=3, max_length=160)
     involved_aliases: str | None = Field(default=None, max_length=500)
     description: str = Field(min_length=20, max_length=2000)
+    reporter_phone: str | None = Field(default=None, max_length=30)
 
     @field_validator("incident_date")
     @classmethod

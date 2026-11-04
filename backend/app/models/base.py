@@ -52,6 +52,7 @@ class User(Base):
     institution_relation: Mapped[str] = mapped_column(String(30))  # "Estudiante" | "Acudiente"
     shift: Mapped[str | None] = mapped_column(String(10), nullable=True)  # "JM" | "JT"
     course: Mapped[str | None] = mapped_column(String(40), nullable=True)  # ej. "1002"
+    phone_number: Mapped[str | None] = mapped_column(String(30), nullable=True)
     role: Mapped[str] = mapped_column(String(20), default=UserRole.USER, index=True)
     is_sanctioned: Mapped[bool] = mapped_column(Boolean, default=False)
     sanction_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -88,6 +89,7 @@ class Report(Base):
     user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     public_code: Mapped[str] = mapped_column(String(16), unique=True, index=True)
     reporter_name: Mapped[str] = mapped_column(String(120))
+    reporter_phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
     incident_type: Mapped[str] = mapped_column(String(40), index=True)
     incident_date: Mapped[date] = mapped_column(Date)
     approximate_time_start: Mapped[time] = mapped_column(Time)
