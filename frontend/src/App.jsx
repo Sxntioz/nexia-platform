@@ -997,20 +997,22 @@ function Home({ user, lang = 'es' }) {
             </button>
           </div>
 
-          {/* Card: Transmisión en Vivo */}
-          <div className="action-hub-card highlight-card">
-            <div className="action-hub-icon" style={{ background: 'rgba(56, 189, 248, 0.15)', color: 'var(--accent-cyan)' }}>
-              <Icon name="camera" size={24} />
+          {/* Card: Transmisión en Vivo (Solo Directivos / Admin) */}
+          {user?.role === 'ADMIN' && (
+            <div className="action-hub-card highlight-card">
+              <div className="action-hub-icon" style={{ background: 'rgba(56, 189, 248, 0.15)', color: 'var(--accent-cyan)' }}>
+                <Icon name="camera" size={24} />
+              </div>
+              <h3>{lang === 'es' ? 'Transmitir en Vivo (CCTV)' : 'Live CCTV Broadcast'}</h3>
+              <p>{lang === 'es' ? 'Conecta una cámara en tiempo real a la matriz CCTV escolar y audita eventos con el Motor de IA NEXIA.' : 'Connect a camera in real-time to the school CCTV matrix and audit events with the NEXIA AI Engine.'}</p>
+              <button
+                className="button primary full-width"
+                onClick={() => navigate('cctv_broadcast')}
+              >
+                🔴 {lang === 'es' ? 'Transmitir en Vivo' : 'Live Broadcast'}
+              </button>
             </div>
-            <h3>{lang === 'es' ? 'Transmitir en Vivo (CCTV)' : 'Live CCTV Broadcast'}</h3>
-            <p>{lang === 'es' ? 'Conecta una cámara en tiempo real a la matriz CCTV escolar y audita eventos con el Motor de IA NEXIA.' : 'Connect a camera in real-time to the school CCTV matrix and audit events with the NEXIA AI Engine.'}</p>
-            <button
-              className="button primary full-width"
-              onClick={() => navigate('cctv_broadcast')}
-            >
-              🔴 {lang === 'es' ? 'Transmitir en Vivo' : 'Live Broadcast'}
-            </button>
-          </div>
+          )}
 
           {/* Card 4: Manual Escolar */}
           <div className="action-hub-card">
@@ -6413,7 +6415,7 @@ function App() {
       {route.page === 'track' && <TrackCase initialCode={route.payload} lang={lang} />}
       {route.page === 'admin' && <AdminDashboard user={currentUser} />}
       {route.page === 'admin_cctv' && <AdminLiveCCTV user={currentUser} lang={lang} />}
-      {route.page === 'cctv_broadcast' && <CCTVBroadcaster user={currentUser} lang={lang} />}
+      {route.page === 'cctv_broadcast' && (currentUser?.role === 'ADMIN' ? <CCTVBroadcaster user={currentUser} lang={lang} /> : <Home user={currentUser} lang={lang} />)}
       {route.page === 'admin_cameras' && <AdminCameras user={currentUser} />}
       {route.page === 'admin_recordings' && <AdminRecordings user={currentUser} />}
       {route.page === 'admin_users' && <AdminUsers user={currentUser} />}
